@@ -1,0 +1,91 @@
+tools:
+  - name: execute_python
+    description: "Execute a Python expression or statement in TouchDesigner's Python environment and return the result"
+    parameters:
+      type: object
+      properties:
+        code:
+          type: string
+          description: "Python code to execute. Use td module to interact with TouchDesigner (e.g. td.op('/project1') to find operators)"
+      required: [code]
+    script: scripts/execute_python.py
+    affinity: main
+    execution: sync
+    timeout_hint_secs: 30
+
+  - name: get_project_info
+    description: "Return basic information about the current TouchDesigner project"
+    parameters:
+      type: object
+      properties: {}
+    script: scripts/get_project_info.py
+    affinity: main
+    execution: sync
+    timeout_hint_secs: 10
+
+  - name: list_operators
+    description: "List operators in a given component or the root"
+    parameters:
+      type: object
+      properties:
+        path:
+          type: string
+          description: "Path to a COMP to list children of (e.g. '/project1'). Defaults to root '/'"
+          default: "/"
+        recurse:
+          type: boolean
+          description: "If true, recurse into child components"
+          default: false
+        type_filter:
+          type: string
+          description: "Optional operator type filter (e.g. 'COMP', 'TOP', 'CHOP', 'SOP', 'MAT', 'DAT')"
+    script: scripts/list_operators.py
+    affinity: main
+    execution: sync
+    timeout_hint_secs: 15
+
+  - name: get_op_parameters
+    description: "Get parameter values of a specific operator"
+    parameters:
+      type: object
+      properties:
+        path:
+          type: string
+          description: "Path to the operator (e.g. '/project1/constant1')"
+      required: [path]
+    script: scripts/get_op_parameters.py
+    affinity: main
+    execution: sync
+    timeout_hint_secs: 10
+
+  - name: set_op_parameter
+    description: "Set a parameter value on an operator"
+    parameters:
+      type: object
+      properties:
+        path:
+          type: string
+          description: "Path to the operator (e.g. '/project1/constant1')"
+        parameter:
+          type: string
+          description: "Parameter name to set"
+        value:
+          description: "Value to set. Type depends on the parameter"
+      required: [path, parameter, value]
+    script: scripts/set_op_parameter.py
+    affinity: main
+    execution: sync
+    timeout_hint_secs: 10
+
+  - name: capture_viewport
+    description: "Capture a screenshot of the current TouchDesigner viewport or a specific panel"
+    parameters:
+      type: object
+      properties:
+        panel_path:
+          type: string
+          description: "Optional path to a TOP or panel to capture. Defaults to the main performance view"
+    script: scripts/capture_viewport.py
+    affinity: main
+    execution: sync
+    timeout_hint_secs: 30
