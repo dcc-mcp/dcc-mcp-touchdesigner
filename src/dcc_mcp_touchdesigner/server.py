@@ -184,6 +184,7 @@ class TouchDesignerMcpServer(DccServerBase):
             if dispatcher is None and execution_bridge is None:
                 # Default to a UI dispatcher if none provided
                 try:
+                    __import__("td")
                     from dcc_mcp_touchdesigner.host import TouchDesignerUiDispatcher
 
                     dispatcher = TouchDesignerUiDispatcher()
@@ -234,8 +235,9 @@ class TouchDesignerMcpServer(DccServerBase):
         if gateway_port_arg == 0 or (gateway_port_arg is None and not enable_gw):
             self._config.gateway_port = 0
 
-        # Host dispatcher (if any) is owned by core's execution bridge
-        self._td_dispatcher: Any = getattr(self, "_dcc_dispatcher", None)
+        # The bridge stores a callable wrapper; the adapter owns the source
+        # dispatcher that installs TouchDesigner's native timer pump.
+        self._td_dispatcher: Any = options.dispatcher if options.execution_bridge is None else None
 
     # ── TouchDesigner version detection ───────────────────────────────────
 
