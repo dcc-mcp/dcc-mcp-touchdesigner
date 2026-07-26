@@ -166,6 +166,32 @@ class TestSkillPathCollection:
 class TestServerLifecycle:
     """Start/stop lifecycle tests using a real McpHttpServer."""
 
+    def test_start_and_stop_drive_source_ui_dispatcher(self):
+        from dcc_mcp_touchdesigner.host import TouchDesignerUiDispatcher
+        from dcc_mcp_touchdesigner.server import TouchDesignerMcpServer
+
+        class FakePump:
+            def __init__(self):
+                self.is_installed = False
+
+            def install(self, _tick_fn):
+                self.is_installed = True
+
+            def uninstall(self):
+                self.is_installed = False
+
+        pump = FakePump()
+        dispatcher = TouchDesignerUiDispatcher(pump=pump)
+        server = TouchDesignerMcpServer(port=0, dispatcher=dispatcher)
+
+        assert server._td_dispatcher is dispatcher
+        server.start()
+        try:
+            assert pump.is_installed
+        finally:
+            server.stop()
+        assert not pump.is_installed
+
     def test_start_and_stop(self):
         from dcc_mcp_touchdesigner.server import TouchDesignerMcpServer
 
