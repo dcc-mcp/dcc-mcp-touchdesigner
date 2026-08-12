@@ -30,6 +30,17 @@ jobs:
           cache: pip
       - name: Install
         run: python -m pip install -e ".[dev]" build twine
+      - name: Install dcc-mcp-cli
+        env:
+          DCC_MCP_CLI_VERSION: 0.20.2
+          DCC_MCP_CLI_SHA256: 1168ebe901cfc0526d3d0f363d18ac4f8e21d2bcc874557e5813acbee8480f9c
+        run: |
+          curl --fail --location --retry 3 \
+            --output /tmp/dcc-mcp-cli \
+            "https://github.com/dcc-mcp/dcc-mcp-core/releases/download/v${DCC_MCP_CLI_VERSION}/dcc-mcp-cli-linux-x86_64"
+          echo "${DCC_MCP_CLI_SHA256}  /tmp/dcc-mcp-cli" | sha256sum --check
+          chmod +x /tmp/dcc-mcp-cli
+          sudo install /tmp/dcc-mcp-cli /usr/local/bin/dcc-mcp-cli
       - name: Lint
         run: |
           ruff check src tests packaging .github/scripts
