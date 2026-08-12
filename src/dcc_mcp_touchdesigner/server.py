@@ -23,11 +23,13 @@ Usage (inside TouchDesigner Python console or startup script)::
 from __future__ import annotations
 
 import logging
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from dcc_mcp_core import DccServerOptions, HostExecutionBridge
+from dcc_mcp_core.readiness import AdapterReadinessBinder
 from dcc_mcp_core.server_base import DccServerBase
 
 from dcc_mcp_touchdesigner import _env
@@ -115,15 +117,17 @@ class TouchDesignerServerOptions:
             port=self.port,
             server_name=self.server_name,
             server_version=self.server_version,
+            adapter_version=self.server_version,
+            instance_type="gui",
             gateway_port=self.gateway_port,
             registry_dir=self.registry_dir,
             dcc_version=self.dcc_version,
             scene=self.scene,
             enable_gateway_failover=_env.resolve_enable_gateway_failover(self.enable_gateway_failover),
             enable_file_logging=True,
-            enable_job_persistence=_env.resolve_job_storage(self.job_storage_path) is not None,
+            enable_job_persistence=True,
             enable_telemetry=True,
-            dcc_pid=self.dcc_pid,
+            dcc_pid=self.dcc_pid or os.getpid(),
             dcc_window_title=self.dcc_window_title,
             dispatcher=dispatcher,
             execution_bridge=execution_bridge,
@@ -209,6 +213,7 @@ class TouchDesignerMcpServer(DccServerBase):
             )
 
         super().__init__(options=options.to_core_options())
+        self._readiness = AdapterReadinessBinder(self)
 
         self._extra_skill_paths: List[str] = list(options.extra_skill_paths or [])
 
@@ -242,11 +247,11 @@ class TouchDesignerMcpServer(DccServerBase):
     # ── TouchDesigner version detection ───────────────────────────────────
 
     def _version_string(self) -> str:
-        """Return the TouchDesigner version via the ``td`` module."""
+        """Return the TouchDesigner version via the documented app object."""
         try:
             import td
 
-            return str(td.version)
+            return str(td.app.version)
         except ImportError:
             return "unknown"
 
@@ -279,14 +284,30 @@ class TouchDesignerMcpServer(DccServerBase):
         Returns *self* for chaining.
         """
         super().start(install_atexit_hook=install_atexit_hook)
-        if self._td_dispatcher is not None:
-            start_fn = getattr(self._td_dispatcher, "start", None)
-            if callable(start_fn):
-                start_fn()
+        try:
+            if self._td_dispatcher is not None:
+                start_fn = getattr(self._td_dispatcher, "start", None)
+                if callable(start_fn):
+                    start_fn()
+            self._readiness.mark_dispatcher_ready(
+                True,
+                host_execution_bridge_ready=True,
+                main_thread_executor_ready=True,
+                dcc_ready=True,
+            )
+        except Exception:
+            super().stop()
+            raise
         return self
 
     def stop(self) -> None:
         """Stop the HTTP server and the dispatcher."""
+        self._readiness.mark_dispatcher_ready(
+            False,
+            host_execution_bridge_ready=False,
+            main_thread_executor_ready=False,
+            dcc_ready=False,
+        )
         super().stop()
 
         if self._td_dispatcher is not None:

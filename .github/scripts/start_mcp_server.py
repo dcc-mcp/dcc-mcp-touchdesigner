@@ -21,13 +21,17 @@ def main() -> int:
     try:
         server = dcc_mcp_touchdesigner.start_server(port=0)
         server.discover_skills()
-        print(json.dumps({
-            "status": "running",
-            "mcp_url": server.mcp_url,
-            "port": server.port,
-            "version": dcc_mcp_touchdesigner.__version__,
-            "skills_discovered": server.loaded_skill_count(),
-        }))
+        print(
+            json.dumps(
+                {
+                    "status": "running",
+                    "mcp_url": server.mcp_url,
+                    "port": server.port,
+                    "version": dcc_mcp_touchdesigner.__version__,
+                    "skills_discovered": server.loaded_skill_count(),
+                }
+            )
+        )
         return 0
     except Exception as exc:
         print(json.dumps({"error": str(exc)}))
