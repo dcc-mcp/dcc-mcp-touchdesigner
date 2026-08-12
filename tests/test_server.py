@@ -36,6 +36,18 @@ class TestTouchDesignerMcpServerBasic:
         monkeypatch.setenv("DCC_MCP_TOUCHDESIGNER_PORT", "18765")
         assert TouchDesignerServerOptions(port=0).to_core_options().port == 0
 
+    def test_core_options_identify_gui_adapter_and_current_process(self):
+        import os
+
+        from dcc_mcp_touchdesigner.server import SERVER_VERSION, TouchDesignerServerOptions
+
+        options = TouchDesignerServerOptions(port=0).to_core_options()
+
+        assert options.instance_type == "gui"
+        assert options.diagnostics.dcc_pid == os.getpid()
+        assert options.sidecar.adapter_version == SERVER_VERSION
+        assert options.observability.enable_job_persistence is True
+
     def test_custom_port(self):
         from dcc_mcp_touchdesigner.server import TouchDesignerMcpServer
 

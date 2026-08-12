@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.26"]
 build-backend = "hatchling.build"
 
 [project]
@@ -12,7 +12,7 @@ license = { text = "MIT" }
 requires-python = ">=3.9"
 keywords = ["touchdesigner", "mcp", "dcc", "ai", "llm", "model-context-protocol"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
@@ -24,17 +24,18 @@ classifiers = [
     "Topic :: Multimedia :: Graphics",
 ]
 
-dependencies = [
-    "dcc-mcp-core>=0.19.45,<1.0.0",
-]
+dependencies = ["dcc-mcp-core>=0.19.91,<1.0.0"]
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=7.0",
+    "pytest>=8.0",
     "pytest-cov>=4.0",
     "pytest-mock>=3.0",
     "ruff>=0.8.0",
     "pyyaml>=5.0",
+    "build>=1.2",
+    "twine>=7.0; python_version >= '3.10'",
+    "twine>=6.2,<7.0; python_version < '3.10'",
 ]
 
 [project.urls]
@@ -47,10 +48,14 @@ touchdesigner = "dcc_mcp_touchdesigner:TouchDesignerMcpServer"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/dcc_mcp_touchdesigner"]
+artifacts = ["src/dcc_mcp_touchdesigner/skills/**"]
+
+[tool.hatch.build.targets.sdist]
+exclude = ["docs/**/*.png", "docs/**/*.svg", "docs/**/*.webp"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["tests"]
+pythonpath = ["src", "."]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]

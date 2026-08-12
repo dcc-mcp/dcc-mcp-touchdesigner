@@ -1,8 +1,8 @@
 """TouchDesigner host adapter for dcc-mcp-core main-thread dispatch.
 
-TouchDesigner runs most operations on its main thread. The ``td`` module
-is always available inside TouchDesigner's Python environment. Use
-``td.timer`` for periodic callbacks (equivalent to Blender's ``bpy.app.timers``).
+TouchDesigner objects may only be accessed from its main thread.  The adapter
+therefore schedules bounded dispatcher ticks with TouchDesigner's documented
+``td.run`` API and cancels the pending :class:`td.Run` during shutdown.
 """
 
 from __future__ import annotations
@@ -29,15 +29,15 @@ class TouchDesignerTimerPumpStats:
 
 
 class TouchDesignerTimerPump:
-    """Small adapter around ``td.timer``.
+    """Small adapter around TouchDesigner's cancellable ``td.run`` API.
 
-    Core owns dispatcher queue semantics. This class owns only TouchDesigner's
-    timer primitive so future core pump abstractions can replace it cleanly.
-
-    TouchDesigner's ``td.timer.callback`` takes a callable and a delay in
-    milliseconds. Setting delay to 0 schedules the callback as soon as possible
-    on the main thread.
+    Core owns queue semantics.  This class owns one pending ``td.Run`` at a
+    time and reschedules itself after every bounded tick.  ``wallTime`` and the
+    independent ``TDResources`` timeline keep delayed work moving when the
+    project timeline is paused.
     """
+
+    _RUN_GROUP = "dcc-mcp-touchdesigner-pump"
 
     def __init__(self, budget_ms: float = 200.0) -> None:
         if budget_ms <= 0:
@@ -45,7 +45,7 @@ class TouchDesignerTimerPump:
         self.budget_ms = float(budget_ms)
         self.stats = TouchDesignerTimerPumpStats()
         self._tick_fn: Optional[TickFn] = None
-        self._registered_fn: Optional[Callable[[], None]] = None
+        self._run_handle: Any = None
         self._tick_thread_ident: Optional[int] = None
         self._running = False
 
@@ -60,7 +60,7 @@ class TouchDesignerTimerPump:
         return self._running
 
     def install(self, tick_fn: TickFn) -> None:
-        """Register ``tick_fn`` with TouchDesigner's timer API."""
+        """Register ``tick_fn`` with TouchDesigner's main-thread scheduler."""
         if self._running:
             self._tick_fn = tick_fn
             return
@@ -69,29 +69,58 @@ class TouchDesignerTimerPump:
 
         self._tick_fn = tick_fn
         self._running = True
+        self._schedule(td, delay_secs=0.0)
 
-        def _tick_wrapper() -> None:
-            self._tick_thread_ident = threading.get_ident()
-            start = time.monotonic()
-            try:
-                if self._tick_fn is None:
-                    return
-                delay_ms = self._tick_fn()
-                if delay_ms is not None and self._running:
-                    td.timer.callback(_tick_wrapper, delay_ms=int(delay_ms * 1000))
-            finally:
-                elapsed_ms = (time.monotonic() - start) * 1000.0
-                self.stats.ticks += 1
-                self.stats.last_tick_ms = elapsed_ms
-                if elapsed_ms > self.budget_ms:
-                    self.stats.overrun_cycles += 1
+    def _schedule(self, td: Any, *, delay_secs: float) -> None:
+        kwargs: dict[str, Any] = {
+            "group": self._RUN_GROUP,
+        }
+        if delay_secs <= 0:
+            kwargs["endFrame"] = True
+        else:
+            kwargs.update(
+                delayMilliSeconds=max(1, round(delay_secs * 1000.0)),
+                wallTime=True,
+            )
+            delay_ref = getattr(getattr(td, "op", None), "TDResources", None)
+            if delay_ref is not None:
+                kwargs["delayRef"] = delay_ref
+        self._run_handle = td.run(self._tick_once, **kwargs)
 
-        td.timer.callback(_tick_wrapper, delay_ms=0)
+    def _tick_once(self, *_args: Any) -> None:
+        """Drain one bounded batch and arrange the next main-thread tick."""
+        self._run_handle = None
+        if not self._running or self._tick_fn is None:
+            return
+
+        import td
+
+        self._tick_thread_ident = threading.get_ident()
+        start = time.monotonic()
+        delay_secs: Optional[float] = None
+        try:
+            delay_secs = self._tick_fn()
+        finally:
+            elapsed_ms = (time.monotonic() - start) * 1000.0
+            self.stats.ticks += 1
+            self.stats.last_tick_ms = elapsed_ms
+            if elapsed_ms > self.budget_ms:
+                self.stats.overrun_cycles += 1
+
+        if self._running and delay_secs is not None:
+            self._schedule(td, delay_secs=max(0.0, float(delay_secs)))
 
     def uninstall(self) -> None:
-        """Mark the pump as uninstalled."""
+        """Cancel the pending run and mark the pump as uninstalled."""
         self._running = False
         self._tick_fn = None
+        run_handle, self._run_handle = self._run_handle, None
+        if run_handle is not None:
+            try:
+                run_handle.kill()
+            except Exception:
+                # TouchDesigner invalidates a Run object once it has executed.
+                pass
 
     def pumped_ms(self) -> float:
         """Return the most recent timer tick duration in milliseconds."""
@@ -309,9 +338,9 @@ class TouchDesignerInlineCallableDispatcher:
 class TouchDesignerHost(HostAdapter):
     """Drive a dcc-mcp-core dispatcher from TouchDesigner's main thread.
 
-    TouchDesigner exposes ``td.timer`` as its native idle primitive. In
-    interactive mode this adapter registers the core dispatcher tick with that
-    timer API.
+    TouchDesigner exposes ``td.run`` as its cancellable main-thread scheduling
+    primitive. In interactive mode this adapter registers the core dispatcher
+    tick with that API.
     """
 
     def __init__(self, dispatcher, **kwargs) -> None:
@@ -328,7 +357,7 @@ class TouchDesignerHost(HostAdapter):
         return False
 
     def attach_tick(self, tick_fn: TickFn) -> None:
-        """Register ``tick_fn`` with ``td.timer``."""
+        """Register ``tick_fn`` with ``td.run``."""
         self._timer_pump.install(tick_fn)
 
     def detach_tick(self) -> None:

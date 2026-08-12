@@ -6,23 +6,15 @@ Returns:
 
 from __future__ import annotations
 
-import sys
 from typing import Any
 
-from dcc_mcp_touchdesigner.api import skill_entry, skill_success
+from dcc_mcp_touchdesigner.api import skill_entry, skill_exception, skill_success
+from dcc_mcp_touchdesigner.operations import get_project_info as _get_project_info
 
 
 @skill_entry
-def get_project_info() -> dict[str, Any]:
-    import td
-
-    project = td.mod(td.rootPage).name if hasattr(td, "rootPage") else "unknown"
-
-    return skill_success(
-        {
-            "project_name": project,
-            "touchdesigner_version": str(td.version),
-            "python_version": sys.version,
-            "fps": float(project.fps) if hasattr(project, "fps") else None,
-        }
-    )
+def main() -> dict[str, Any]:
+    try:
+        return skill_success("TouchDesigner project inspected.", project=_get_project_info())
+    except Exception as exc:
+        return skill_exception(exc, message="Project inspection failed.", include_traceback=False)

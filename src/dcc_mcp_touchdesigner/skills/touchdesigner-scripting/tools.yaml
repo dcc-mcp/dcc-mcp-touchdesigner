@@ -1,91 +1,329 @@
 tools:
-  - name: execute_python
-    description: "Execute a Python expression or statement in TouchDesigner's Python environment and return the result"
-    parameters:
-      type: object
-      properties:
-        code:
-          type: string
-          description: "Python code to execute. Use td module to interact with TouchDesigner (e.g. td.op('/project1') to find operators)"
-      required: [code]
-    script: scripts/execute_python.py
-    affinity: main
-    execution: sync
-    timeout_hint_secs: 30
-
   - name: get_project_info
-    description: "Return basic information about the current TouchDesigner project"
-    parameters:
-      type: object
-      properties: {}
-    script: scripts/get_project_info.py
-    affinity: main
+    description: Inspect the current TouchDesigner project, host version, cook rate, and root operator count.
+    source_file: scripts/get_project_info.py
     execution: sync
+    job_strategy: monolithic
+    affinity: main
+    enforce_thread_affinity: true
     timeout_hint_secs: 10
+    input_schema:
+      type: object
+      additionalProperties: false
+      properties: {}
+    output_schema:
+      type: object
+      required: [success, message, context]
+      properties:
+        success: {type: boolean}
+        message: {type: string}
+        context:
+          type: object
+          required: [project]
+          additionalProperties: true
+    annotations:
+      read_only_hint: true
+      destructive_hint: false
+      idempotent_hint: true
+      open_world_hint: false
+    tags: [touchdesigner, project, inspect]
 
   - name: list_operators
-    description: "List operators in a given component or the root"
-    parameters:
+    description: List direct or recursive TouchDesigner operators below a component, optionally filtered by family or type.
+    source_file: scripts/list_operators.py
+    execution: sync
+    job_strategy: monolithic
+    affinity: main
+    enforce_thread_affinity: true
+    timeout_hint_secs: 15
+    input_schema:
       type: object
+      additionalProperties: false
       properties:
         path:
           type: string
-          description: "Path to a COMP to list children of (e.g. '/project1'). Defaults to root '/'"
           default: "/"
         recurse:
           type: boolean
-          description: "If true, recurse into child components"
           default: false
         type_filter:
           type: string
-          description: "Optional operator type filter (e.g. 'COMP', 'TOP', 'CHOP', 'SOP', 'MAT', 'DAT')"
-    script: scripts/list_operators.py
-    affinity: main
-    execution: sync
-    timeout_hint_secs: 15
+          description: Case-insensitive family or operator type, such as TOP or noiseTOP.
+    output_schema:
+      type: object
+      required: [success, message, context]
+      properties:
+        success: {type: boolean}
+        message: {type: string}
+        context:
+          type: object
+          required: [listing]
+          additionalProperties: true
+    annotations:
+      read_only_hint: true
+      destructive_hint: false
+      idempotent_hint: true
+      open_world_hint: false
+    tags: [touchdesigner, operator, inspect, hierarchy]
 
   - name: get_op_parameters
-    description: "Get parameter values of a specific operator"
-    parameters:
-      type: object
-      properties:
-        path:
-          type: string
-          description: "Path to the operator (e.g. '/project1/constant1')"
-      required: [path]
-    script: scripts/get_op_parameters.py
-    affinity: main
+    description: Read selected or all parameters from one TouchDesigner operator.
+    source_file: scripts/get_op_parameters.py
     execution: sync
+    job_strategy: monolithic
+    affinity: main
+    enforce_thread_affinity: true
     timeout_hint_secs: 10
+    input_schema:
+      type: object
+      additionalProperties: false
+      required: [path]
+      properties:
+        path: {type: string, minLength: 1}
+        names:
+          type: array
+          items: {type: string, minLength: 1}
+          uniqueItems: true
+    output_schema:
+      type: object
+      required: [success, message, context]
+      properties:
+        success: {type: boolean}
+        message: {type: string}
+        context:
+          type: object
+          required: [parameters]
+          additionalProperties: true
+    annotations:
+      read_only_hint: true
+      destructive_hint: false
+      idempotent_hint: true
+      open_world_hint: false
+    tags: [touchdesigner, operator, parameter, inspect]
+
+  - name: create_operator
+    description: Create an operator inside a component using a documented TouchDesigner type name such as noiseTOP.
+    source_file: scripts/create_operator.py
+    execution: sync
+    job_strategy: monolithic
+    affinity: main
+    enforce_thread_affinity: true
+    timeout_hint_secs: 15
+    input_schema:
+      type: object
+      additionalProperties: false
+      required: [parent_path, operator_type]
+      properties:
+        parent_path: {type: string, minLength: 1}
+        operator_type: {type: string, minLength: 1}
+        name: {type: string, minLength: 1}
+    output_schema:
+      type: object
+      required: [success, message, context]
+      properties:
+        success: {type: boolean}
+        message: {type: string}
+        context:
+          type: object
+          required: [created]
+          additionalProperties: true
+    annotations:
+      read_only_hint: false
+      destructive_hint: false
+      idempotent_hint: false
+      open_world_hint: false
+    tags: [touchdesigner, operator, create, node-graph]
+
+  - name: connect_operators
+    description: Connect one TouchDesigner operator output to an explicit target input connector.
+    source_file: scripts/connect_operators.py
+    execution: sync
+    job_strategy: monolithic
+    affinity: main
+    enforce_thread_affinity: true
+    timeout_hint_secs: 10
+    input_schema:
+      type: object
+      additionalProperties: false
+      required: [source_path, target_path]
+      properties:
+        source_path: {type: string, minLength: 1}
+        target_path: {type: string, minLength: 1}
+        output_index: {type: integer, minimum: 0, default: 0}
+        input_index: {type: integer, minimum: 0, default: 0}
+    output_schema:
+      type: object
+      required: [success, message, context]
+      properties:
+        success: {type: boolean}
+        message: {type: string}
+        context:
+          type: object
+          required: [connection]
+          additionalProperties: true
+    annotations:
+      read_only_hint: false
+      destructive_hint: false
+      idempotent_hint: false
+      open_world_hint: false
+    tags: [touchdesigner, operator, connect, node-graph]
 
   - name: set_op_parameter
-    description: "Set a parameter value on an operator"
-    parameters:
-      type: object
-      properties:
-        path:
-          type: string
-          description: "Path to the operator (e.g. '/project1/constant1')"
-        parameter:
-          type: string
-          description: "Parameter name to set"
-        value:
-          description: "Value to set. Type depends on the parameter"
-      required: [path, parameter, value]
-    script: scripts/set_op_parameter.py
-    affinity: main
+    description: Set one TouchDesigner parameter and return its evaluated value for read-back verification.
+    source_file: scripts/set_op_parameter.py
     execution: sync
+    job_strategy: monolithic
+    affinity: main
+    enforce_thread_affinity: true
     timeout_hint_secs: 10
-
-  - name: capture_viewport
-    description: "Capture a screenshot of the current TouchDesigner viewport or a specific panel"
-    parameters:
+    input_schema:
       type: object
+      additionalProperties: false
+      required: [path, parameter, value]
       properties:
-        panel_path:
-          type: string
-          description: "Optional path to a TOP or panel to capture. Defaults to the main performance view"
-    script: scripts/capture_viewport.py
-    affinity: main
+        path: {type: string, minLength: 1}
+        parameter: {type: string, minLength: 1}
+        value: {}
+    output_schema:
+      type: object
+      required: [success, message, context]
+      properties:
+        success: {type: boolean}
+        message: {type: string}
+        context:
+          type: object
+          required: [update]
+          additionalProperties: true
+    annotations:
+      read_only_hint: false
+      destructive_hint: false
+      idempotent_hint: true
+      open_world_hint: false
+    tags: [touchdesigner, operator, parameter, edit]
+
+  - name: capture_top
+    description: Export one TOP to an explicit PNG path and return dimensions, size, and SHA-256 integrity metadata.
+    source_file: scripts/capture_top.py
     execution: sync
+    job_strategy: monolithic
+    affinity: main
+    enforce_thread_affinity: true
     timeout_hint_secs: 30
+    input_schema:
+      type: object
+      additionalProperties: false
+      required: [path, output_path]
+      properties:
+        path: {type: string, minLength: 1}
+        output_path: {type: string, minLength: 1}
+        overwrite: {type: boolean, default: false}
+    output_schema:
+      type: object
+      required: [success, message, context]
+      properties:
+        success: {type: boolean}
+        message: {type: string}
+        context:
+          type: object
+          required: [artifact]
+          additionalProperties: true
+    annotations:
+      read_only_hint: false
+      destructive_hint: false
+      idempotent_hint: false
+      open_world_hint: true
+    tags: [touchdesigner, top, capture, artifact]
+
+  - name: save_project
+    description: Save the current project to an explicit .toe path and return size and SHA-256 integrity metadata.
+    source_file: scripts/save_project.py
+    execution: sync
+    job_strategy: monolithic
+    affinity: main
+    enforce_thread_affinity: true
+    timeout_hint_secs: 60
+    input_schema:
+      type: object
+      additionalProperties: false
+      required: [path]
+      properties:
+        path: {type: string, minLength: 1}
+        overwrite: {type: boolean, default: false}
+    output_schema:
+      type: object
+      required: [success, message, context]
+      properties:
+        success: {type: boolean}
+        message: {type: string}
+        context:
+          type: object
+          required: [artifact]
+          additionalProperties: true
+    annotations:
+      read_only_hint: false
+      destructive_hint: false
+      idempotent_hint: false
+      open_world_hint: true
+    tags: [touchdesigner, project, save, artifact]
+
+  - name: delete_operator
+    description: Delete one explicitly addressed non-root TouchDesigner operator.
+    source_file: scripts/delete_operator.py
+    execution: sync
+    job_strategy: monolithic
+    affinity: main
+    enforce_thread_affinity: true
+    timeout_hint_secs: 10
+    input_schema:
+      type: object
+      additionalProperties: false
+      required: [path]
+      properties:
+        path: {type: string, minLength: 1, not: {const: "/"}}
+    output_schema:
+      type: object
+      required: [success, message, context]
+      properties:
+        success: {type: boolean}
+        message: {type: string}
+        context:
+          type: object
+          required: [deleted]
+          additionalProperties: true
+    annotations:
+      read_only_hint: false
+      destructive_hint: true
+      idempotent_hint: false
+      open_world_hint: false
+    tags: [touchdesigner, operator, delete, node-graph]
+
+  - name: execute_python
+    description: Execute an advanced Python expression or statement inside TouchDesigner when adapter policy permits it.
+    source_file: scripts/execute_python.py
+    execution: sync
+    job_strategy: monolithic
+    affinity: main
+    enforce_thread_affinity: true
+    timeout_hint_secs: 30
+    input_schema:
+      type: object
+      additionalProperties: false
+      required: [code]
+      properties:
+        code: {type: string, minLength: 1}
+    output_schema:
+      type: object
+      required: [success, message, context]
+      properties:
+        success: {type: boolean}
+        message: {type: string}
+        context:
+          type: object
+          required: [result, stdout, stderr]
+          additionalProperties: true
+    annotations:
+      read_only_hint: false
+      destructive_hint: true
+      idempotent_hint: false
+      open_world_hint: true
+    tags: [touchdesigner, python, advanced, scripting]

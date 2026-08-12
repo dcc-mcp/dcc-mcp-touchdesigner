@@ -11,45 +11,19 @@ from __future__ import annotations
 
 from typing import Any
 
-from dcc_mcp_touchdesigner.api import skill_entry, skill_error, skill_success
+from dcc_mcp_touchdesigner.api import skill_entry, skill_error, skill_exception, skill_success
+from dcc_mcp_touchdesigner.operations import (
+    TouchDesignerOperationError,
+    get_operator_parameters,
+)
 
 
 @skill_entry
-def get_op_parameters(path: str) -> dict[str, Any]:
-    import td
-
+def main(path: str, names: list[str] | None = None) -> dict[str, Any]:
     try:
-        op = td.op(path)
-    except Exception:
-        return skill_error(f"Failed to resolve operator at path: {path}")
-
-    if op is None:
-        return skill_error(f"Operator not found at path: {path}")
-
-    params: dict[str, Any] = {}
-    for par in op.pars():
-        name = par.name
-        try:
-            val = par.eval()
-            params[name] = {
-                "value": val,
-                "label": par.label,
-                "default": getattr(par, "default", None),
-                "mode": str(getattr(par, "mode", "CONSTANT")),
-            }
-        except Exception:
-            params[name] = {
-                "value": str(par),
-                "label": par.label,
-                "mode": str(getattr(par, "mode", "CONSTANT")),
-            }
-
-    return skill_success(
-        {
-            "path": path,
-            "name": op.name,
-            "type": str(op.type) if hasattr(op, "type") else str(type(op)),
-            "parameter_count": len(params),
-            "parameters": params,
-        }
-    )
+        parameters = get_operator_parameters(path, names=names)
+        return skill_success("TouchDesigner parameters inspected.", parameters=parameters)
+    except TouchDesignerOperationError as exc:
+        return skill_error("Parameter inspection failed.", str(exc))
+    except Exception as exc:
+        return skill_exception(exc, message="Parameter inspection failed.", include_traceback=False)

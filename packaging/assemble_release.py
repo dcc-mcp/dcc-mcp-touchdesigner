@@ -1,6 +1,6 @@
 """Assemble dcc-mcp-touchdesigner release payload.
 
-Usage: python packaging/assemble_release.py [--wheel]
+Usage: python packaging/assemble_release.py
 
 Produces a zip archive with the wheel plus a bootstrap script that can be
 extracted into TouchDesigner's site-packages or a custom project folder.
@@ -9,26 +9,27 @@ extracted into TouchDesigner's site-packages or a custom project folder.
 from __future__ import annotations
 
 import argparse
-import shutil
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
-from zipfile import ZipFile, ZIP_DEFLATED
+from zipfile import ZIP_DEFLATED, ZipFile
 
 ROOT = Path(__file__).resolve().parent.parent
 DIST = ROOT / "dist"
-BOOTSTRAP_TEMPLATE = '''"""TouchDesigner MCP bootstrap — import this in a DAT execute callback."""
-import sys
+BOOTSTRAP_TEMPLATE = '''"""TouchDesigner MCP bootstrap — run from a Text DAT on the host thread."""
 import os
+import sys
 
-_ZIP = os.path.join(os.path.dirname(__file__), "payload.zip")
-if os.path.exists(_ZIP) and _ZIP not in sys.path:
-    sys.path.insert(0, _ZIP)
+_WHEEL = os.path.join(os.path.dirname(__file__), "payload", {wheel_name!r})
+if not os.path.isfile(_WHEEL):
+    raise RuntimeError(f"TouchDesigner adapter wheel not found: {{_WHEEL}}")
+if _WHEEL not in sys.path:
+    sys.path.insert(0, _WHEEL)
 
 import dcc_mcp_touchdesigner
+
 server = dcc_mcp_touchdesigner.start_server()
-print(f"[dcc-mcp-touchdesigner] MCP server listening at {server.mcp_url}")
+print(f"[dcc-mcp-touchdesigner] MCP server listening at {{server.mcp_url}}")
 '''
 
 
@@ -47,14 +48,13 @@ def build_wheel() -> Path:
 def assemble_zip(out_path: Path, wheel: Path) -> None:
     """Create the release zip with bootstrap script + wheel."""
     with ZipFile(out_path, "w", ZIP_DEFLATED) as zf:
-        zf.writestr("bootstrap.py", BOOTSTRAP_TEMPLATE)
+        zf.writestr("bootstrap.py", BOOTSTRAP_TEMPLATE.format(wheel_name=wheel.name))
         zf.write(wheel, f"payload/{wheel.name}")
     print(f"Release zip written to: {out_path}")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Assemble dcc-mcp-touchdesigner release")
-    parser.add_argument("--wheel", action="store_true", help="Also build the wheel")
     parser.add_argument("-o", "--output", default=None, help="Output zip path")
     args = parser.parse_args()
 
