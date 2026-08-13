@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.1](https://github.com/dcc-mcp/dcc-mcp-touchdesigner/compare/v0.1.0...v0.1.1) (2026-08-13)
+
+
+### Features
+
+* expand typed TouchDesigner control surface ([#5](https://github.com/dcc-mcp/dcc-mcp-touchdesigner/issues/5)) ([fd75de3](https://github.com/dcc-mcp/dcc-mcp-touchdesigner/commit/fd75de372317df7e91f377b44d1d92f291685fe9))
+
 ## 0.1.0 (2026-08-12)
 
 
