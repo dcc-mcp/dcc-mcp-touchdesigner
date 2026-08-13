@@ -9,7 +9,7 @@ Returns:
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Optional
 
 from dcc_mcp_touchdesigner.api import skill_entry, skill_error, skill_exception, skill_success
 from dcc_mcp_touchdesigner.operations import (
@@ -19,9 +19,9 @@ from dcc_mcp_touchdesigner.operations import (
 
 
 @skill_entry
-def main(path: str, names: list[str] | None = None) -> dict[str, Any]:
+def main(path: str, names: Optional[list[str]] = None, limit: int = 500) -> dict[str, Any]:
     try:
-        parameters = get_operator_parameters(path, names=names)
+        parameters = get_operator_parameters(path, names=names, limit=limit)
         return skill_success("TouchDesigner parameters inspected.", parameters=parameters)
     except TouchDesignerOperationError as exc:
         return skill_error("Parameter inspection failed.", str(exc))

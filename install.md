@@ -120,4 +120,6 @@ For release acceptance, verify all six readiness checks and call a cheap read-on
 - `No module named td` in a terminal: expected; run host API code inside TouchDesigner.
 - Instance absent from the CLI: compare the registry directory and gateway environment used by TouchDesigner and the terminal.
 - HTTP server is available but host tools time out: confirm the project is cooking and the adapter's `td.run()` main-thread pump has not been stopped.
-- `execute_python` is unavailable: check `DCC_MCP_TOUCHDESIGNER_DISABLE_EXECUTE_PYTHON`; typed tools remain available.
+- A legacy client asks for `execute_python`: upgrade it to the typed graph,
+  DAT, parameter, and timeline tools; arbitrary Python is intentionally not a
+  public adapter capability.

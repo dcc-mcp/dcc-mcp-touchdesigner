@@ -23,9 +23,10 @@ def main(
     path: str = "/",
     recurse: bool = False,
     type_filter: Optional[str] = None,
+    limit: int = 500,
 ) -> dict[str, Any]:
     try:
-        listing = _list_operators(path or "/", recurse=recurse, type_filter=type_filter)
+        listing = _list_operators(path or "/", recurse=recurse, type_filter=type_filter, limit=limit)
         return skill_success("TouchDesigner operators listed.", listing=listing)
     except TouchDesignerOperationError as exc:
         return skill_error("Operator listing failed.", str(exc))

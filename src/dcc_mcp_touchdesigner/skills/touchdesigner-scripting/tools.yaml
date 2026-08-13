@@ -43,12 +43,16 @@ tools:
         path:
           type: string
           default: "/"
+          maxLength: 1024
+          pattern: "^/"
         recurse:
           type: boolean
           default: false
         type_filter:
           type: string
+          maxLength: 256
           description: Case-insensitive family or operator type, such as TOP or noiseTOP.
+        limit: {type: integer, minimum: 1, maximum: 5000, default: 500}
     output_schema:
       type: object
       required: [success, message, context]
@@ -79,11 +83,13 @@ tools:
       additionalProperties: false
       required: [path]
       properties:
-        path: {type: string, minLength: 1}
+        path: {type: string, minLength: 1, maxLength: 1024, pattern: "^/"}
         names:
           type: array
-          items: {type: string, minLength: 1}
+          maxItems: 256
+          items: {type: string, minLength: 1, maxLength: 256}
           uniqueItems: true
+        limit: {type: integer, minimum: 1, maximum: 2000, default: 500}
     output_schema:
       type: object
       required: [success, message, context]
@@ -114,9 +120,9 @@ tools:
       additionalProperties: false
       required: [parent_path, operator_type]
       properties:
-        parent_path: {type: string, minLength: 1}
-        operator_type: {type: string, minLength: 1}
-        name: {type: string, minLength: 1}
+        parent_path: {type: string, minLength: 1, maxLength: 1024, pattern: "^/"}
+        operator_type: {type: string, minLength: 1, maxLength: 256}
+        name: {type: string, minLength: 1, maxLength: 256}
     output_schema:
       type: object
       required: [success, message, context]
@@ -147,10 +153,10 @@ tools:
       additionalProperties: false
       required: [source_path, target_path]
       properties:
-        source_path: {type: string, minLength: 1}
-        target_path: {type: string, minLength: 1}
-        output_index: {type: integer, minimum: 0, default: 0}
-        input_index: {type: integer, minimum: 0, default: 0}
+        source_path: {type: string, minLength: 1, maxLength: 1024, pattern: "^/"}
+        target_path: {type: string, minLength: 1, maxLength: 1024, pattern: "^/"}
+        output_index: {type: integer, minimum: 0, maximum: 255, default: 0}
+        input_index: {type: integer, minimum: 0, maximum: 255, default: 0}
     output_schema:
       type: object
       required: [success, message, context]
@@ -181,8 +187,8 @@ tools:
       additionalProperties: false
       required: [path, parameter, value]
       properties:
-        path: {type: string, minLength: 1}
-        parameter: {type: string, minLength: 1}
+        path: {type: string, minLength: 1, maxLength: 1024, pattern: "^/"}
+        parameter: {type: string, minLength: 1, maxLength: 256}
         value: {}
     output_schema:
       type: object
@@ -214,8 +220,8 @@ tools:
       additionalProperties: false
       required: [path, output_path]
       properties:
-        path: {type: string, minLength: 1}
-        output_path: {type: string, minLength: 1}
+        path: {type: string, minLength: 1, maxLength: 1024, pattern: "^/"}
+        output_path: {type: string, minLength: 1, maxLength: 32767}
         overwrite: {type: boolean, default: false}
     output_schema:
       type: object
@@ -247,7 +253,7 @@ tools:
       additionalProperties: false
       required: [path]
       properties:
-        path: {type: string, minLength: 1}
+        path: {type: string, minLength: 1, maxLength: 32767}
         overwrite: {type: boolean, default: false}
     output_schema:
       type: object
@@ -279,7 +285,7 @@ tools:
       additionalProperties: false
       required: [path]
       properties:
-        path: {type: string, minLength: 1, not: {const: "/"}}
+        path: {type: string, minLength: 1, maxLength: 1024, pattern: "^/", not: {const: "/"}}
     output_schema:
       type: object
       required: [success, message, context]
@@ -297,20 +303,20 @@ tools:
       open_world_hint: false
     tags: [touchdesigner, operator, delete, node-graph]
 
-  - name: execute_python
-    description: Execute an advanced Python expression or statement inside TouchDesigner when adapter policy permits it.
-    source_file: scripts/execute_python.py
+  - name: inspect_operator
+    description: Inspect one exact operator's identity, flags, connector counts, and bounded cook diagnostics.
+    source_file: scripts/inspect_operator.py
     execution: sync
     job_strategy: monolithic
     affinity: main
     enforce_thread_affinity: true
-    timeout_hint_secs: 30
+    timeout_hint_secs: 10
     input_schema:
       type: object
       additionalProperties: false
-      required: [code]
+      required: [path]
       properties:
-        code: {type: string, minLength: 1}
+        path: {type: string, minLength: 1, maxLength: 1024, pattern: "^/"}
     output_schema:
       type: object
       required: [success, message, context]
@@ -319,11 +325,314 @@ tools:
         message: {type: string}
         context:
           type: object
-          required: [result, stdout, stderr]
+          required: [inspection]
+          additionalProperties: true
+    annotations:
+      read_only_hint: true
+      destructive_hint: false
+      idempotent_hint: true
+      open_world_hint: false
+    tags: [touchdesigner, operator, inspect, diagnostics]
+
+  - name: inspect_connections
+    description: Inspect bounded input and output connector topology for one exact operator.
+    source_file: scripts/inspect_connections.py
+    execution: sync
+    job_strategy: monolithic
+    affinity: main
+    enforce_thread_affinity: true
+    timeout_hint_secs: 10
+    input_schema:
+      type: object
+      additionalProperties: false
+      required: [path]
+      properties:
+        path: {type: string, minLength: 1, maxLength: 1024, pattern: "^/"}
+    output_schema:
+      type: object
+      required: [success, message, context]
+      properties:
+        success: {type: boolean}
+        message: {type: string}
+        context:
+          type: object
+          required: [topology]
+          additionalProperties: true
+    annotations:
+      read_only_hint: true
+      destructive_hint: false
+      idempotent_hint: true
+      open_world_hint: false
+    tags: [touchdesigner, operator, connector, inspect]
+
+  - name: disconnect_operator_input
+    description: Disconnect one exact input connector without affecting sibling inputs or other operators.
+    source_file: scripts/disconnect_operator_input.py
+    execution: sync
+    job_strategy: monolithic
+    affinity: main
+    enforce_thread_affinity: true
+    timeout_hint_secs: 10
+    input_schema:
+      type: object
+      additionalProperties: false
+      required: [path]
+      properties:
+        path: {type: string, minLength: 1, maxLength: 1024, pattern: "^/"}
+        input_index: {type: integer, minimum: 0, maximum: 255, default: 0}
+    output_schema:
+      type: object
+      required: [success, message, context]
+      properties:
+        success: {type: boolean}
+        message: {type: string}
+        context:
+          type: object
+          required: [disconnection]
           additionalProperties: true
     annotations:
       read_only_hint: false
-      destructive_hint: true
+      destructive_hint: false
+      idempotent_hint: true
+      open_world_hint: false
+    tags: [touchdesigner, operator, connector, disconnect]
+
+  - name: pulse_op_parameter
+    description: Pulse one exact parameter using bounded value, frame, or second duration arguments.
+    source_file: scripts/pulse_op_parameter.py
+    execution: sync
+    job_strategy: monolithic
+    affinity: main
+    enforce_thread_affinity: true
+    timeout_hint_secs: 10
+    input_schema:
+      type: object
+      additionalProperties: false
+      required: [path, parameter]
+      properties:
+        path: {type: string, minLength: 1, maxLength: 1024, pattern: "^/"}
+        parameter: {type: string, minLength: 1, maxLength: 256}
+        value: {default: 1}
+        frames: {type: integer, minimum: 0, maximum: 1000000, default: 0}
+        seconds: {type: number, minimum: 0, maximum: 86400, default: 0}
+    output_schema:
+      type: object
+      required: [success, message, context]
+      properties:
+        success: {type: boolean}
+        message: {type: string}
+        context:
+          type: object
+          required: [pulse]
+          additionalProperties: true
+    annotations:
+      read_only_hint: false
+      destructive_hint: false
       idempotent_hint: false
-      open_world_hint: true
-    tags: [touchdesigner, python, advanced, scripting]
+      open_world_hint: false
+    tags: [touchdesigner, operator, parameter, pulse]
+
+  - name: set_operator_flags
+    description: Atomically update allowlisted operator flags with rollback if any assignment fails.
+    source_file: scripts/set_operator_flags.py
+    execution: sync
+    job_strategy: monolithic
+    affinity: main
+    enforce_thread_affinity: true
+    timeout_hint_secs: 10
+    input_schema:
+      type: object
+      additionalProperties: false
+      required: [path, flags]
+      properties:
+        path: {type: string, minLength: 1, maxLength: 1024, pattern: "^/"}
+        flags:
+          type: object
+          minProperties: 1
+          additionalProperties: false
+          properties:
+            bypass: {type: boolean}
+            display: {type: boolean}
+            lock: {type: boolean}
+            render: {type: boolean}
+            viewer: {type: boolean}
+    output_schema:
+      type: object
+      required: [success, message, context]
+      properties:
+        success: {type: boolean}
+        message: {type: string}
+        context:
+          type: object
+          required: [update]
+          additionalProperties: true
+    annotations:
+      read_only_hint: false
+      destructive_hint: false
+      idempotent_hint: true
+      open_world_hint: false
+    tags: [touchdesigner, operator, flags, edit]
+
+  - name: set_operator_layout
+    description: Atomically update bounded Network Editor position or size fields with rollback on failure.
+    source_file: scripts/set_operator_layout.py
+    execution: sync
+    job_strategy: monolithic
+    affinity: main
+    enforce_thread_affinity: true
+    timeout_hint_secs: 10
+    input_schema:
+      type: object
+      minProperties: 2
+      additionalProperties: false
+      required: [path]
+      properties:
+        path: {type: string, minLength: 1, maxLength: 1024, pattern: "^/"}
+        x: {type: integer, minimum: -1000000, maximum: 1000000}
+        y: {type: integer, minimum: -1000000, maximum: 1000000}
+        width: {type: integer, minimum: 10, maximum: 10000}
+        height: {type: integer, minimum: 10, maximum: 10000}
+    output_schema:
+      type: object
+      required: [success, message, context]
+      properties:
+        success: {type: boolean}
+        message: {type: string}
+        context:
+          type: object
+          required: [update]
+          additionalProperties: true
+    annotations:
+      read_only_hint: false
+      destructive_hint: false
+      idempotent_hint: true
+      open_world_hint: false
+    tags: [touchdesigner, operator, layout, node-graph, edit]
+
+  - name: get_dat_content
+    description: Read bounded Unicode text from one DAT and return size, shape, and SHA-256 metadata.
+    source_file: scripts/get_dat_content.py
+    execution: sync
+    job_strategy: monolithic
+    affinity: main
+    enforce_thread_affinity: true
+    timeout_hint_secs: 10
+    input_schema:
+      type: object
+      additionalProperties: false
+      required: [path]
+      properties:
+        path: {type: string, minLength: 1, maxLength: 1024, pattern: "^/"}
+        max_bytes: {type: integer, minimum: 1, maximum: 1048576, default: 1048576}
+    output_schema:
+      type: object
+      required: [success, message, context]
+      properties:
+        success: {type: boolean}
+        message: {type: string}
+        context:
+          type: object
+          required: [document]
+          additionalProperties: true
+    annotations:
+      read_only_hint: true
+      destructive_hint: false
+      idempotent_hint: true
+      open_world_hint: false
+    tags: [touchdesigner, dat, text, inspect]
+
+  - name: set_dat_content
+    description: Replace one Text or Table DAT using bounded Unicode and optional SHA-256 optimistic concurrency.
+    source_file: scripts/set_dat_content.py
+    execution: sync
+    job_strategy: monolithic
+    affinity: main
+    enforce_thread_affinity: true
+    timeout_hint_secs: 10
+    input_schema:
+      type: object
+      additionalProperties: false
+      required: [path, content]
+      properties:
+        path: {type: string, minLength: 1, maxLength: 1024, pattern: "^/"}
+        content: {type: string, maxLength: 1048576}
+        expected_sha256: {type: string, pattern: "^[0-9a-fA-F]{64}$"}
+    output_schema:
+      type: object
+      required: [success, message, context]
+      properties:
+        success: {type: boolean}
+        message: {type: string}
+        context:
+          type: object
+          required: [update]
+          additionalProperties: true
+    annotations:
+      read_only_hint: false
+      destructive_hint: false
+      idempotent_hint: true
+      open_world_hint: false
+    tags: [touchdesigner, dat, text, unicode, edit]
+
+  - name: get_timeline_state
+    description: Inspect the root timeline frame/play state and project cook-rate/real-time controls.
+    source_file: scripts/get_timeline_state.py
+    execution: sync
+    job_strategy: monolithic
+    affinity: main
+    enforce_thread_affinity: true
+    timeout_hint_secs: 10
+    input_schema:
+      type: object
+      additionalProperties: false
+      properties: {}
+    output_schema:
+      type: object
+      required: [success, message, context]
+      properties:
+        success: {type: boolean}
+        message: {type: string}
+        context:
+          type: object
+          required: [timeline]
+          additionalProperties: true
+    annotations:
+      read_only_hint: true
+      destructive_hint: false
+      idempotent_hint: true
+      open_world_hint: false
+    tags: [touchdesigner, timeline, project, inspect]
+
+  - name: set_timeline_state
+    description: Atomically update explicitly supplied root frame/play/cook-rate/real-time fields with rollback on failure.
+    source_file: scripts/set_timeline_state.py
+    execution: sync
+    job_strategy: monolithic
+    affinity: main
+    enforce_thread_affinity: true
+    timeout_hint_secs: 10
+    input_schema:
+      type: object
+      minProperties: 1
+      additionalProperties: false
+      properties:
+        frame: {type: number, minimum: 0, maximum: 1000000000}
+        play: {type: boolean}
+        cook_rate: {type: number, minimum: 1, maximum: 1000}
+        real_time: {type: boolean}
+    output_schema:
+      type: object
+      required: [success, message, context]
+      properties:
+        success: {type: boolean}
+        message: {type: string}
+        context:
+          type: object
+          required: [update]
+          additionalProperties: true
+    annotations:
+      read_only_hint: false
+      destructive_hint: false
+      idempotent_hint: true
+      open_world_hint: false
+    tags: [touchdesigner, timeline, project, edit]

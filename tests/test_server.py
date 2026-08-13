@@ -367,7 +367,7 @@ class TestProgressiveLoading:
         from unittest.mock import MagicMock
 
         mock_inner = MagicMock()
-        mock_inner.load_skill.return_value = ["touchdesigner_scripting__execute_python"]
+        mock_inner.load_skill.return_value = ["touchdesigner_scripting__inspect_operator"]
         mock_inner.is_loaded.return_value = True
 
         server = self._make_server_with_mock(mock_inner)
@@ -493,7 +493,35 @@ class TestModuleSingleton:
 
 
 class TestVersionDetection:
-    """_version_string returns "unknown" outside TouchDesigner."""
+    """_version_string reports the public release identifier."""
+
+    def test_current_release_uses_year_build(self, monkeypatch):
+        import sys
+        from types import SimpleNamespace
+
+        from dcc_mcp_touchdesigner.server import TouchDesignerMcpServer
+
+        monkeypatch.setitem(
+            sys.modules,
+            "td",
+            SimpleNamespace(app=SimpleNamespace(version="099", build="2025.33070")),
+        )
+        server = TouchDesignerMcpServer(port=0)
+        assert server._version_string() == "2025.33070"
+
+    def test_legacy_release_combines_generation_and_build(self, monkeypatch):
+        import sys
+        from types import SimpleNamespace
+
+        from dcc_mcp_touchdesigner.server import TouchDesignerMcpServer
+
+        monkeypatch.setitem(
+            sys.modules,
+            "td",
+            SimpleNamespace(app=SimpleNamespace(version="099", build="12345")),
+        )
+        server = TouchDesignerMcpServer(port=0)
+        assert server._version_string() == "099.12345"
 
     def test_version_unknown_outside_td(self):
         from dcc_mcp_touchdesigner.server import TouchDesignerMcpServer

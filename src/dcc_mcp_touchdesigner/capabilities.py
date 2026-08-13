@@ -23,7 +23,10 @@ _TOUCHDESIGNER_CAPS = DccCapabilities(
         "chop_channels": True,
         "touch_osc": True,
         "toe_file_format": True,
-        "python_expression": True,
+        "typed_dat_content": True,
+        "typed_timeline": True,
+        "typed_operator_layout": True,
+        "arbitrary_python_tool": False,
         "component_system": True,
     },
 )
