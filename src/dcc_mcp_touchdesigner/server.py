@@ -34,6 +34,7 @@ from dcc_mcp_core.server_base import DccServerBase
 
 from dcc_mcp_touchdesigner import _env
 from dcc_mcp_touchdesigner.__version__ import __version__
+from dcc_mcp_touchdesigner._host_info import touchdesigner_release
 from dcc_mcp_touchdesigner.host import TouchDesignerInlineCallableDispatcher
 
 logger = logging.getLogger(__name__)
@@ -59,7 +60,7 @@ def _is_host_queue_dispatcher(dispatcher: Any) -> bool:
     return callable(getattr(dispatcher, "post", None)) and callable(getattr(dispatcher, "tick", None))
 
 
-def _host_dispatcher_from(dispatcher: Any) -> Any | None:
+def _host_dispatcher_from(dispatcher: Any) -> Optional[Any]:
     """Resolve the core host dispatcher hidden behind adapter wrappers."""
     if _is_host_queue_dispatcher(dispatcher):
         return dispatcher
@@ -247,11 +248,11 @@ class TouchDesignerMcpServer(DccServerBase):
     # ── TouchDesigner version detection ───────────────────────────────────
 
     def _version_string(self) -> str:
-        """Return the TouchDesigner version via the documented app object."""
+        """Return the public TouchDesigner release via the documented app object."""
         try:
             import td
 
-            return str(td.app.version)
+            return touchdesigner_release(td.app)
         except ImportError:
             return "unknown"
 

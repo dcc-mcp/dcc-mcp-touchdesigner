@@ -13,27 +13,37 @@ metadata:
 
 # TouchDesigner Scripting
 
-Use these tools to inspect, author, connect, validate, save, and capture a live
-TouchDesigner project. Every tool declares `affinity: main`; never access
-TouchDesigner operators from a background thread.
+Use these 19 bounded tools to inspect, author, connect, validate, save, and
+capture a live TouchDesigner project. Every tool declares `affinity: main`;
+never access TouchDesigner operators from a background thread.
 
 ## Recommended workflow
 
 1. Call `get_project_info` and `list_operators` before editing.
-2. Use `create_operator` with documented type names such as `noiseTOP` and
-   `levelTOP`.
-3. Wire compatible families with `connect_operators`, then use
-   `set_op_parameter` and read the value back with `get_op_parameters`.
-4. Export a representative TOP with `capture_top` and save the project with
+2. Use `inspect_operator`, `inspect_connections`, and `get_op_parameters` to
+   capture the exact pre-mutation state.
+3. Use `create_operator` with documented type names such as `noiseTOP` and
+   `levelTOP`; wire them with `connect_operators`.
+4. Use `set_op_parameter`, `pulse_op_parameter`, `set_operator_flags`,
+   `set_operator_layout`, or `disconnect_operator_input` for one explicitly
+   addressed mutation.
+5. Read/write arbitrary Unicode Text/Table DAT content without a language
+   allowlist, using SHA-256 optimistic concurrency, and control root time
+   through the typed timeline tools.
+6. Export a representative TOP with `capture_top` and save the project with
    `save_project`; both return artifact hashes.
-5. Use `delete_operator` only for explicitly named non-root nodes.
+7. Use `delete_operator` only for explicitly named non-root nodes.
 
 ## Safety
 
 - `save_project` and `capture_top` reject existing files unless `overwrite` is
   explicitly true.
 - `/` cannot be deleted.
-- `execute_python` is an escape hatch and can be disabled with
-  `DCC_MCP_TOUCHDESIGNER_DISABLE_EXECUTE_PYTHON=1` or
-  `DCC_MCP_DISABLE_ARBITRARY_SCRIPT=1`.
-- Prefer the typed graph tools over arbitrary Python.
+- Recursive graph, parameter, connector, JSON, and DAT results have explicit
+  size/count limits.
+- DAT mutation is restricted to Text DAT and Table DAT; executable DAT types
+  are rejected.
+- DAT text is opaque Unicode data: never detect a language, normalize content,
+  or assume LTR layout. TouchDesigner still owns identifier naming rules.
+- The public tool catalog exposes no arbitrary Python, expression evaluator,
+  or script execution escape hatch.

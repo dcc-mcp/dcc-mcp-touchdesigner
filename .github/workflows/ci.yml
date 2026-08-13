@@ -56,4 +56,4 @@ jobs:
           twine check dist/*
           python -m venv wheel-smoke
           wheel-smoke/bin/python -m pip install dist/*.whl
-          wheel-smoke/bin/python -c "import importlib.resources as r; root = r.files('dcc_mcp_touchdesigner'); assert root.joinpath('skills', 'touchdesigner-scripting', 'tools.yaml').is_file()"
+          wheel-smoke/bin/python -c "import importlib.resources as r, re; root = r.files('dcc_mcp_touchdesigner'); skill = root.joinpath('skills', 'touchdesigner-scripting'); manifest = skill.joinpath('tools.yaml').read_text(encoding='utf-8'); assert len(re.findall(r'^  - name:', manifest, re.MULTILINE)) == 19; assert 'name: execute_python' not in manifest; assert not skill.joinpath('scripts', 'execute_python.py').is_file()"

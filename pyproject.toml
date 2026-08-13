@@ -51,7 +51,17 @@ packages = ["src/dcc_mcp_touchdesigner"]
 artifacts = ["src/dcc_mcp_touchdesigner/skills/**"]
 
 [tool.hatch.build.targets.sdist]
-exclude = ["docs/**/*.png", "docs/**/*.svg", "docs/**/*.webp"]
+exclude = [
+    "docs/**/*.png",
+    "docs/**/*.svg",
+    "docs/**/*.webp",
+    "/.venv",
+    "/build",
+    "/dist",
+    "/venv",
+    "/work",
+    "/work-*",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

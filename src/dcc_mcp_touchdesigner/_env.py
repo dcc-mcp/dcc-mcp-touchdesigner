@@ -18,8 +18,6 @@ ENV_METRICS = "DCC_MCP_TOUCHDESIGNER_METRICS"
 ENV_JOB_STORAGE = "DCC_MCP_TOUCHDESIGNER_JOB_STORAGE"
 ENV_ENABLE_WORKFLOWS = "DCC_MCP_TOUCHDESIGNER_ENABLE_WORKFLOWS"
 ENV_ENABLE_GATEWAY_FAILOVER = "DCC_MCP_TOUCHDESIGNER_ENABLE_GATEWAY_FAILOVER"
-ENV_DISABLE_EXECUTE_PYTHON = "DCC_MCP_TOUCHDESIGNER_DISABLE_EXECUTE_PYTHON"
-ENV_DISABLE_ARBITRARY_SCRIPT = "DCC_MCP_TOUCHDESIGNER_DISABLE_ARBITRARY_SCRIPT"
 ENV_READINESS_TIMEOUT_SECS = "DCC_MCP_TOUCHDESIGNER_READINESS_TIMEOUT_SECS"
 ENV_PROJECT_TOOLS = "DCC_MCP_TOUCHDESIGNER_PROJECT_TOOLS"
 ENV_RESOURCES = "DCC_MCP_TOUCHDESIGNER_RESOURCES"
@@ -39,13 +37,6 @@ def _resolve_opt_out(env_name: str, flag: Optional[bool]) -> bool:
     if raw is None:
         return True
     return raw.strip() != "0"
-
-
-def resolve_execute_python_disabled() -> bool:
-    """Return True when ``execute_python`` must refuse all calls."""
-    if _env_truthy(ENV_DISABLE_ARBITRARY_SCRIPT):
-        return True
-    return _env_truthy(ENV_DISABLE_EXECUTE_PYTHON)
 
 
 def resolve_metrics_enabled(metrics_enabled: Optional[bool]) -> bool:
