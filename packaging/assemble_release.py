@@ -16,21 +16,9 @@ from zipfile import ZIP_DEFLATED, ZipFile
 
 ROOT = Path(__file__).resolve().parent.parent
 DIST = ROOT / "dist"
-BOOTSTRAP_TEMPLATE = '''"""TouchDesigner MCP bootstrap — run from a Text DAT on the host thread."""
-import os
-import sys
-
-_WHEEL = os.path.join(os.path.dirname(__file__), "payload", {wheel_name!r})
-if not os.path.isfile(_WHEEL):
-    raise RuntimeError(f"TouchDesigner adapter wheel not found: {{_WHEEL}}")
-if _WHEEL not in sys.path:
-    sys.path.insert(0, _WHEEL)
-
-import dcc_mcp_touchdesigner
-
-server = dcc_mcp_touchdesigner.start_server()
-print(f"[dcc-mcp-touchdesigner] MCP server listening at {{server.mcp_url}}")
-'''
+BOOTSTRAP_TEMPLATE = (ROOT / "src" / "dcc_mcp_touchdesigner" / "resources" / "bootstrap.py.tmpl").read_text(
+    encoding="utf-8"
+)
 
 
 def build_wheel() -> Path:
@@ -47,8 +35,9 @@ def build_wheel() -> Path:
 
 def assemble_zip(out_path: Path, wheel: Path) -> None:
     """Create the release zip with bootstrap script + wheel."""
+    adapter_path = f'os.path.join(os.path.dirname(__file__), "payload", {wheel.name!r})'
     with ZipFile(out_path, "w", ZIP_DEFLATED) as zf:
-        zf.writestr("bootstrap.py", BOOTSTRAP_TEMPLATE.format(wheel_name=wheel.name))
+        zf.writestr("bootstrap.py", BOOTSTRAP_TEMPLATE.replace("{adapter_path}", adapter_path))
         zf.write(wheel, f"payload/{wheel.name}")
     print(f"Release zip written to: {out_path}")
 

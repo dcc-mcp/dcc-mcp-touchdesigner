@@ -14,15 +14,22 @@ _Illustrative workflow visualization generated with OpenAI ImageGen from the ret
 
 ## Install
 
-TouchDesigner 2025 uses Python 3.11. Install this package into a matching external environment and expose that environment to TouchDesigner. The preferred TouchDesigner 2025 route is the built-in `TDPyEnvManager`; the Preferences dialog's external Python module path is also supported.
+TouchDesigner 2025 uses Python 3.11. Install this package into the interpreter
+that TouchDesigner will import, inspect the machine-readable plan, and apply the
+receipt-owned integration:
 
-```powershell
-py -3.11 -m venv .venv
-.\.venv\Scripts\python -m pip install --upgrade pip
-.\.venv\Scripts\python -m pip install dcc-mcp-touchdesigner
+```text
+python -m pip install --upgrade dcc-mcp-touchdesigner
+dcc-mcp-touchdesigner install --dry-run --json
+dcc-mcp-touchdesigner install --yes --json
+dcc-mcp-touchdesigner verify --json
 ```
 
-See [install.md](install.md) for the complete Windows and macOS setup, dependency isolation guidance, and startup configuration. TouchDesigner documents both [external Python packages](https://docs.derivative.ca/Python#Installing_Custom_Python_Packages) and the [TDPyEnvManager](https://docs.derivative.ca/Palette%3AtdPyEnvManager).
+TouchDesigner physically stores startup callbacks in a project Execute DAT, so
+the installer returns one structured `file_edit` and exit code 50 until that
+edit and a restart are complete. See [install.md](install.md) for supported
+platforms, exact flags and exit codes, the `TDPyEnvManager`/Preferences manual
+route, upgrade, uninstall, verification, and recovery.
 
 ## Start in TouchDesigner
 
