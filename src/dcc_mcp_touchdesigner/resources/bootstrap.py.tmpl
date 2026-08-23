@@ -1,0 +1,50 @@
+"""TouchDesigner MCP bootstrap — run from a Text or Execute DAT on the host thread."""
+import datetime
+import json
+import os
+import sys
+
+_WHEEL = {adapter_path}
+_ADAPTER_PATH = _WHEEL
+_ERROR_LOG = os.environ.get(
+    "DCC_MCP_TOUCHDESIGNER_BOOTSTRAP_ERROR_LOG",
+    os.path.join(os.path.expanduser("~"), ".dcc-mcp", "logs", "touchdesigner-bootstrap.jsonl"),
+)
+
+
+def _record_bootstrap(payload):
+    payload["timestamp"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    os.makedirs(os.path.dirname(_ERROR_LOG), exist_ok=True)
+    with open(_ERROR_LOG, "a", encoding="utf-8") as stream:
+        stream.write(json.dumps(payload, sort_keys=True) + "\n")
+        stream.flush()
+        os.fsync(stream.fileno())
+
+
+try:
+    if not os.path.exists(_ADAPTER_PATH):
+        raise RuntimeError("TouchDesigner adapter path not found: %s" % _ADAPTER_PATH)
+    if _WHEEL not in sys.path:
+        sys.path.insert(0, _WHEEL)
+    import dcc_mcp_touchdesigner
+
+    server = dcc_mcp_touchdesigner.start_server()
+except BaseException as exc:
+    try:
+        _record_bootstrap(
+            {
+                "stage": "initialize",
+                "success": False,
+                "exception_type": type(exc).__name__,
+                "reason": str(exc),
+            }
+        )
+    except OSError:
+        pass
+    raise
+else:
+    try:
+        _record_bootstrap({"stage": "initialize", "success": True})
+    except OSError:
+        pass
+    print("[dcc-mcp-touchdesigner] MCP server listening at %s" % server.mcp_url)

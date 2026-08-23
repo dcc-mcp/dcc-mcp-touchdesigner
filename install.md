@@ -1,125 +1,168 @@
 # Installing dcc-mcp-touchdesigner
 
+This is the canonical TouchDesigner adapter runbook. Agents should read the
+[raw file](https://raw.githubusercontent.com/dcc-mcp/dcc-mcp-touchdesigner/main/install.md)
+before changing an installation.
+
 ## Requirements
 
-- TouchDesigner 2025 official build
-- A Python environment matching TouchDesigner's embedded Python version
-- `dcc-mcp-touchdesigner` and its `dcc-mcp-core` dependency installed into that environment
+- An official TouchDesigner 2025 build on Windows or macOS.
+- TouchDesigner's Python 3.11 interpreter, or a Python 3.11 environment whose
+  `site-packages` directory is exposed to TouchDesigner.
+- `dcc-mcp-touchdesigner` and `dcc-mcp-core>=0.19.91` installed in that exact
+  interpreter.
 
-TouchDesigner 2025 currently embeds Python 3.11. Confirm the exact interpreter from the Textport before creating an environment:
+TouchDesigner reports the interpreter and version from the Textport:
 
 ```python
 app.pythonExecutable
 import sys
-
 sys.version
 ```
 
-Do not mix an environment built for a different Python minor version. Avoid overriding TouchDesigner's bundled NumPy or OpenCV unless the project explicitly owns and tests those versions.
+Do not mix Python minor versions or replace TouchDesigner's bundled NumPy or
+OpenCV unless the project owns and tests those binary dependencies.
 
-## Preferred: TDPyEnvManager
+## Supported versions
 
-TouchDesigner 2025 includes `TDPyEnvManager` in the Palette. It creates a project-local Python environment, adds it to TouchDesigner's import path, and can restore requirements at startup.
+| Platform | Host support | Notes |
+| --- | --- | --- |
+| Windows | TouchDesigner 2025, Python 3.11 | Pass `--dcc-path` when the executable is not discoverable. |
+| macOS | TouchDesigner 2025, Python 3.11 | The CLI accepts the executable inside `TouchDesigner.app`. |
+| Linux | Planning and package development only | TouchDesigner is not available for Linux. |
 
-1. Add `TDPyEnvManager` from the Palette to the project.
-2. Select Python vEnv mode and create a `.venv` beside the `.toe` project.
-3. Open that environment's CLI from the component.
-4. Install the adapter:
+The installer rejects older hosts, a non-3.11 target interpreter, an older
+Core, or an adapter version that is not importable by the target interpreter.
 
-   ```text
-   python -m pip install --upgrade pip
-   python -m pip install dcc-mcp-touchdesigner
-   ```
+## Agent quick path
 
-5. Restart TouchDesigner so its Python search path is rebuilt.
-
-For a reproducible project, add this line to the project's `requirements.txt` and let the component restore it:
+Install the package into the target Python 3.11 environment, then inspect the
+machine-readable plan before applying it:
 
 ```text
-dcc-mcp-touchdesigner==0.1.0
+python -m pip install --upgrade dcc-mcp-touchdesigner
+dcc-mcp-touchdesigner install --dry-run --json
+dcc-mcp-touchdesigner install --yes --json
 ```
 
-See Derivative's [TDPyEnvManager documentation](https://docs.derivative.ca/Palette%3AtdPyEnvManager) for `pyproject.toml`, `autoSetup`, and environment lifecycle options.
+Use `--dcc-path PATH` and `--python PATH` if discovery cannot select the exact
+host and interpreter. Every verb also accepts `--json`; mutation verbs require
+`--yes`, and `--dry-run` never writes files.
 
-## Alternative: external Python 3.11 environment
+The installer stages an idempotent bootstrap and receipt at
+`~/.dcc-mcp/receipts/touchdesigner.json`. A successful first install returns
+exit code `50` (`requires_restart`) and exactly one machine-executable
+`next_steps` entry. Apply that `file_edit` to create the named Execute DAT in
+the current project with Start and Exit callbacks enabled, save the project,
+and restart TouchDesigner. The CLI does not pretend that a project-owned DAT
+or host restart can be completed from an external process.
 
-Create a normal Python 3.11 virtual environment outside TouchDesigner:
+After restart, inspect and verify the installation:
+
+```text
+dcc-mcp-touchdesigner status --json
+dcc-mcp-touchdesigner verify --json
+```
+
+`verify` succeeds only when the staged artifacts match the receipt, the target
+interpreter imports both packages, no latest bootstrap error is recorded, the
+Core readiness checks pass, and the read-only
+`touchdesigner_scripting__get_project_info` probe succeeds.
+
+## Manual path
+
+TouchDesigner 2025 includes `TDPyEnvManager` in the Palette. It can create a
+project-local `.venv`, add it to the host import path, and restore requirements
+at startup:
+
+1. Add `TDPyEnvManager` from the Palette and select Python vEnv mode.
+2. Create a `.venv` beside the `.toe` file and open that environment's CLI.
+3. Install `dcc-mcp-touchdesigner` and run the agent quick path with that
+   environment's Python.
+
+For an external environment, create Python 3.11 and install the package:
 
 ```powershell
 py -3.11 -m venv .venv
-.\.venv\Scripts\python -m pip install --upgrade pip
-.\.venv\Scripts\python -m pip install dcc-mcp-touchdesigner
+.\.venv\Scripts\python -m pip install --upgrade pip dcc-mcp-touchdesigner
 ```
 
-In TouchDesigner, open **Edit > Preferences > Python**:
+On macOS, use the equivalent `python3.11 -m venv .venv` and
+`.venv/bin/python`. In **Edit > Preferences > Python**, enable external Python
+site-packages and select the environment's `site-packages` directory. Restart
+TouchDesigner after changing the import path.
 
-1. Enable **Add Externally Installed Python Site-Packages to Search Path**.
-2. Set **Python 64-bit Module Path** to the environment's `Lib\site-packages` directory on Windows, or `lib/python3.11/site-packages` on macOS.
-3. Restart TouchDesigner.
+If the lifecycle CLI is unavailable, create an Execute DAT whose `onStart`
+calls `dcc_mcp_touchdesigner.start_server()` and whose `onExit` calls
+`dcc_mcp_touchdesigner.stop_server()`. The generated `file_edit` is preferred
+because it reuses the release bootstrap and captures startup errors.
 
-Derivative documents this path in [Installing Custom Python Packages](https://docs.derivative.ca/Python#Installing_Custom_Python_Packages).
+## Verify
 
-## Verify imports
+Run:
 
-Open the Textport and run:
-
-```python
-import dcc_mcp_core
-import dcc_mcp_touchdesigner
-
-print(dcc_mcp_touchdesigner.__version__)
+```text
+dcc-mcp-touchdesigner status --json
+dcc-mcp-touchdesigner verify --json
 ```
 
-The `td` module is only available inside TouchDesigner. A normal terminal can validate package installation, but it cannot validate host dispatch or typed tool execution.
+Exit code `0` means directly usable. Exit code `40` means verification failed;
+inspect `verify.failure_stage`, `verify.failure_reason`, and `next_steps` in the
+JSON response. A normal terminal can prove package imports, but it cannot prove
+TouchDesigner dispatch, the main-thread scheduler, or typed tool execution.
 
-## Start and stop with the project
+## Upgrade
 
-For manual testing:
+Upgrade the target environment, review the plan, and apply the staged replace:
 
-```python
-import dcc_mcp_touchdesigner
-
-server = dcc_mcp_touchdesigner.start_server()
-print(server.mcp_url)
+```text
+python -m pip install --upgrade dcc-mcp-touchdesigner
+dcc-mcp-touchdesigner upgrade --dry-run --json
+dcc-mcp-touchdesigner upgrade --yes --json
 ```
 
-For persistent startup, place the same call in an Execute DAT `onStart()` callback. Pair it with `stop_server()` in `onExit()`:
+The upgrade preserves owned artifacts until replacements are staged, records
+their SHA-256 digests, and restores the prior state if installation fails.
+Reapply the returned Execute DAT `file_edit` if its content changed, save, and
+restart before running `verify`.
 
-```python
-def onStart():
-    import dcc_mcp_touchdesigner
+## Uninstall
 
-    dcc_mcp_touchdesigner.start_server()
-    return
+Review status, then remove only artifacts owned by the receipt:
 
-
-def onExit():
-    import dcc_mcp_touchdesigner
-
-    dcc_mcp_touchdesigner.stop_server()
-    return
+```text
+dcc-mcp-touchdesigner status --json
+dcc-mcp-touchdesigner uninstall --dry-run --json
+dcc-mcp-touchdesigner uninstall --yes --json
 ```
 
-The server uses an OS-assigned loopback port and registers itself when a DCC-MCP gateway is available. Do not hard-code a port unless an isolated integration requires it.
-
-## Verify readiness and tools
-
-From a terminal with `dcc-mcp-cli` installed:
-
-```powershell
-dcc-mcp-cli list --output json
-dcc-mcp-cli search --dcc-type touchdesigner --output json
-```
-
-For release acceptance, verify all six readiness checks and call a cheap read-only typed tool before any mutation. Route later calls to the exact `instance_id` when more than one TouchDesigner process is running.
+Delete the project Execute DAT named by the previous install response and save
+the project. The package itself remains in the Python environment so package
+management stays with pip or `TDPyEnvManager`.
 
 ## Troubleshooting
 
-- `No module named dcc_mcp_touchdesigner`: confirm the configured site-packages path and restart TouchDesigner.
-- Binary import or DLL load errors: rebuild the environment with the exact Python minor version reported by `sys.version`.
-- `No module named td` in a terminal: expected; run host API code inside TouchDesigner.
-- Instance absent from the CLI: compare the registry directory and gateway environment used by TouchDesigner and the terminal.
-- HTTP server is available but host tools time out: confirm the project is cooking and the adapter's `td.run()` main-thread pump has not been stopped.
-- A legacy client asks for `execute_python`: upgrade it to the typed graph,
-  DAT, parameter, and timeline tools; arbitrary Python is intentionally not a
-  public adapter capability.
+- `preflight` failure: pass explicit `--dcc-path` and `--python` values, then
+  confirm the target is TouchDesigner 2025 with Python 3.11 and Core 0.19.91 or
+  newer.
+- `installation_state` is `partial` or `repair`: rerun
+  `dcc-mcp-touchdesigner install --yes --json`. The installer only replaces
+  receipt-owned files and fails closed on unrelated content.
+- `installation_state` is `upgrade`: update the target package, then run the
+  upgrade command above.
+- `bootstrap` failure: inspect the bounded error record named in the verify
+  response, fix the target environment, and restart TouchDesigner.
+- `No module named dcc_mcp_touchdesigner`: confirm the Preferences or
+  `TDPyEnvManager` site-packages path and restart.
+- Binary import or DLL load errors: rebuild the environment with the exact
+  Python minor version reported by TouchDesigner.
+- `No module named td` in a terminal: expected; the `td` module exists only in
+  TouchDesigner.
+- Instance absent from discovery: compare the registry and gateway environment
+  used by TouchDesigner and the terminal, then rerun `verify`.
+- Legacy clients requesting `execute_python` must use the registered typed
+  graph, DAT, parameter, and timeline tools; arbitrary Python is not exposed.
+
+TouchDesigner references:
+[TDPyEnvManager](https://docs.derivative.ca/Palette%3AtdPyEnvManager) and
+[Installing Custom Python Packages](https://docs.derivative.ca/Python#Installing_Custom_Python_Packages).
