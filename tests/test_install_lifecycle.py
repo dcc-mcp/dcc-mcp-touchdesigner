@@ -14,7 +14,7 @@ def _configure_preflight(tmp_path, monkeypatch):
     monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
 
     def fake_run(command, **_kwargs):
-        assert Path(command[0]) == Path(sys.executable)
+        assert Path(command[0]).samefile(sys.executable)
         payload = {
             "python_version": "3.11.10",
             "dcc-mcp-core": "0.20.8",
