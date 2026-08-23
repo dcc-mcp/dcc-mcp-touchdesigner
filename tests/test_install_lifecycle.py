@@ -7,14 +7,16 @@ from pathlib import Path
 import pytest
 
 
-def _configure_preflight(tmp_path, monkeypatch):
+def _configure_preflight(tmp_path, monkeypatch, expected_python=None):
     host = tmp_path / "TouchDesigner.2025.30000" / "bin" / "TouchDesigner.exe"
     host.parent.mkdir(parents=True)
     host.write_bytes(b"")
     monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
 
+    expected_python = Path(expected_python or sys.executable)
+
     def fake_run(command, **_kwargs):
-        assert Path(command[0]).samefile(sys.executable)
+        assert Path(command[0]).samefile(expected_python)
         payload = {
             "python_version": "3.11.10",
             "dcc-mcp-core": "0.20.8",
@@ -25,6 +27,34 @@ def _configure_preflight(tmp_path, monkeypatch):
 
     monkeypatch.setattr(subprocess, "run", fake_run)
     return host
+
+
+def test_preflight_treats_symlinked_python_as_the_same_interpreter(tmp_path, monkeypatch, capsys):
+    from dcc_mcp_touchdesigner import cli
+
+    real_python = tmp_path / "python3.11"
+    real_python.write_bytes(b"")
+    python_alias = tmp_path / "python"
+    try:
+        python_alias.symlink_to(real_python)
+    except OSError as exc:
+        pytest.skip(f"file symlinks are unavailable: {exc}")
+    host = _configure_preflight(tmp_path, monkeypatch, expected_python=python_alias)
+
+    code = cli.main(
+        [
+            "install",
+            "--dry-run",
+            "--json",
+            "--dcc-path",
+            str(host),
+            "--python",
+            str(python_alias),
+        ]
+    )
+
+    assert code == 0
+    assert json.loads(capsys.readouterr().out)["status"] == "planned"
 
 
 def test_install_dry_run_plans_existing_release_bootstrap_without_writes(tmp_path, monkeypatch, capsys):
