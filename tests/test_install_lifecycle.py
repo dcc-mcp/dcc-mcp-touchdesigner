@@ -6,6 +6,8 @@ from pathlib import Path
 
 import pytest
 
+from dcc_mcp_touchdesigner.__version__ import __version__ as ADAPTER_VERSION
+
 
 def _configure_preflight(tmp_path, monkeypatch, expected_python=None):
     host = tmp_path / "TouchDesigner.2025.30000" / "bin" / "TouchDesigner.exe"
@@ -20,7 +22,7 @@ def _configure_preflight(tmp_path, monkeypatch, expected_python=None):
         payload = {
             "python_version": "3.11.10",
             "dcc-mcp-core": "0.20.8",
-            "dcc-mcp-touchdesigner": "0.1.1",
+            "dcc-mcp-touchdesigner": ADAPTER_VERSION,
             "site_packages": str(tmp_path / "venv" / "Lib" / "site-packages"),
         }
         return subprocess.CompletedProcess(command, 0, stdout=json.dumps(payload), stderr="")
@@ -230,7 +232,7 @@ def test_verify_reaches_target_import_and_typed_readiness(tmp_path, monkeypatch,
         return subprocess.CompletedProcess(
             command,
             0,
-            stdout=json.dumps({"success": True, "version": "0.1.1"}),
+            stdout=json.dumps({"success": True, "version": ADAPTER_VERSION}),
             stderr="",
         )
 
@@ -263,7 +265,7 @@ def test_target_preflight_rejects_missing_site_packages(monkeypatch):
     payload = {
         "python_version": "3.11.10",
         "dcc-mcp-core": "0.20.8",
-        "dcc-mcp-touchdesigner": "0.1.1",
+        "dcc-mcp-touchdesigner": ADAPTER_VERSION,
         "site_packages": "",
     }
     monkeypatch.setattr(
@@ -286,7 +288,7 @@ def test_target_preflight_reports_malformed_python_version(monkeypatch):
     payload = {
         "python_version": "unknown",
         "dcc-mcp-core": "0.20.8",
-        "dcc-mcp-touchdesigner": "0.1.1",
+        "dcc-mcp-touchdesigner": ADAPTER_VERSION,
         "site_packages": "site-packages",
     }
     monkeypatch.setattr(
@@ -309,7 +311,7 @@ def test_target_preflight_reports_malformed_core_version(monkeypatch):
     payload = {
         "python_version": "3.11.10",
         "dcc-mcp-core": "unknown",
-        "dcc-mcp-touchdesigner": "0.1.1",
+        "dcc-mcp-touchdesigner": ADAPTER_VERSION,
         "site_packages": "site-packages",
     }
     monkeypatch.setattr(
@@ -363,7 +365,7 @@ def test_install_refuses_unowned_artifacts(tmp_path):
     report = {
         "integration_root": str(root),
         "receipt_path": str(receipt),
-        "adapter_version": "0.1.1",
+        "adapter_version": ADAPTER_VERSION,
         "core_version": "0.20.8",
         "touchdesigner_version": "2025.30000",
         "dcc_path": "TouchDesigner.exe",
@@ -388,7 +390,7 @@ def test_failed_upgrade_restores_previous_artifacts_and_receipt(tmp_path, monkey
     report = {
         "integration_root": str(root),
         "receipt_path": str(receipt),
-        "adapter_version": "0.1.1",
+        "adapter_version": ADAPTER_VERSION,
         "core_version": "0.20.8",
         "touchdesigner_version": "2025.30000",
         "dcc_path": "TouchDesigner.exe",
