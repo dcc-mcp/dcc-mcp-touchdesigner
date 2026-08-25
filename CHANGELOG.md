@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.2](https://github.com/dcc-mcp/dcc-mcp-touchdesigner/compare/v0.1.1...v0.1.2) (2026-08-25)
+
+
+### Features
+
+* adopt agent-first install lifecycle ([7844bc9](https://github.com/dcc-mcp/dcc-mcp-touchdesigner/commit/7844bc9789e9c427aec09dc04b351ff2ff5e97bd))
+
 ## [0.1.1](https://github.com/dcc-mcp/dcc-mcp-touchdesigner/compare/v0.1.0...v0.1.1) (2026-08-13)
 
 
