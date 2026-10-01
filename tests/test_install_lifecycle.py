@@ -9,6 +9,13 @@ import pytest
 from dcc_mcp_touchdesigner.__version__ import __version__ as ADAPTER_VERSION
 
 
+def _published_schema_const():
+    """The ``schema_version`` value the published Install SOP schema pins."""
+    from dcc_mcp_core.deployment import load_install_sop_schema
+
+    return load_install_sop_schema()["properties"]["schema_version"]["const"]
+
+
 def _configure_preflight(tmp_path, monkeypatch, expected_python=None):
     host = tmp_path / "TouchDesigner.2025.30000" / "bin" / "TouchDesigner.exe"
     host.parent.mkdir(parents=True)
@@ -29,6 +36,54 @@ def _configure_preflight(tmp_path, monkeypatch, expected_python=None):
 
     monkeypatch.setattr(subprocess, "run", fake_run)
     return host
+
+
+def test_report_schema_version_matches_the_published_schema_const():
+    # ``ARTIFACT_SCHEMA_VERSION`` tracks the schema *artifact* revision and moves
+    # independently of the report field. The report field must track the
+    # artifact's ``const``, so a core that drifts it has to break this test
+    # instead of shipping invalid reports. Reading the report field from the
+    # core constant instead (the pre-fix behaviour) is precisely the bug: the
+    # two counters share a name without sharing a meaning.
+    import dcc_mcp_core
+
+    from dcc_mcp_touchdesigner.install_contract import (
+        ARTIFACT_SCHEMA_VERSION,
+        SCHEMA_VERSION,
+    )
+
+    assert SCHEMA_VERSION == _published_schema_const()
+    assert ARTIFACT_SCHEMA_VERSION == dcc_mcp_core.INSTALL_SOP_SCHEMA_VERSION
+
+
+def test_lifecycle_reports_satisfy_the_published_schema(tmp_path, monkeypatch, capsys):
+    from dcc_mcp_core.deployment import validate_install_sop_report
+
+    from dcc_mcp_touchdesigner import cli
+
+    # The validator runs through the native ABI, which a pure-Python core build
+    # does not ship. The const assertion above stays unconditional; only this
+    # whole-document check is allowed to stand down.
+    native_core = pytest.importorskip("dcc_mcp_core._core")
+    if not callable(getattr(native_core, "_validate_install_sop_report_json", None)):
+        pytest.skip("resolved dcc-mcp-core has no Install SOP validator ABI")
+
+    host = _configure_preflight(tmp_path, monkeypatch)
+    dcc_path = ["--dcc-path", str(host)]
+
+    # Every verb, on both a planned and an applied path: a schema violation on
+    # any of them is a defect, not a style issue.
+    assert cli.main(["install", "--dry-run", "--json", *dcc_path]) == 0
+    validate_install_sop_report(json.loads(capsys.readouterr().out))
+
+    assert cli.main(["status", "--json"]) == 0
+    validate_install_sop_report(json.loads(capsys.readouterr().out))
+
+    assert cli.main(["verify", "--json"]) == 40
+    validate_install_sop_report(json.loads(capsys.readouterr().out))
+
+    assert cli.main(["uninstall", "--dry-run", "--json"]) == 0
+    validate_install_sop_report(json.loads(capsys.readouterr().out))
 
 
 def test_preflight_treats_symlinked_python_as_the_same_interpreter(tmp_path, monkeypatch, capsys):
@@ -78,7 +133,11 @@ def test_install_dry_run_plans_existing_release_bootstrap_without_writes(tmp_pat
     report = json.loads(capsys.readouterr().out)
     stage = next(step for step in report["steps"] if step["id"] == "stage-bootstrap")
     assert code == 0
-    assert report["schema_version"] == 1
+    # The report field is not the schema *artifact* revision (that one is 2 and
+    # moves with core); it is the value the published schema pins via
+    # `properties.schema_version.const`. Assert against the artifact so a core
+    # drift breaks here instead of shipping invalid reports.
+    assert report["schema_version"] == _published_schema_const()
     assert report["status"] == "planned"
     assert report["dcc_type"] == "touchdesigner"
     assert report["touchdesigner_version"] == "2025.30000"
