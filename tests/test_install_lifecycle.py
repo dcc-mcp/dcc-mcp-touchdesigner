@@ -465,6 +465,71 @@ def test_legacy_v2_receipt_still_proves_ownership(tmp_path):
     assert not receipt.exists()
 
 
+def test_corrupt_receipt_schema_version_is_judged_not_owned(tmp_path):
+    # `receipt_owns` feeds `inspect_install`, which every lifecycle verb calls,
+    # and `cli.py` only handles InstallFailure. A receipt whose `schema_version`
+    # is an unhashable JSON value (hand-edited, or restored from a bad backup)
+    # must therefore be judged simply not ours -- not raise. `in` on a set hashes
+    # its operand and raises TypeError on a list or dict; `in` on a tuple compares
+    # by equality and returns False.
+    from dcc_mcp_touchdesigner.install_contract import RECEIPT_READABLE_SCHEMA_VERSIONS
+    from dcc_mcp_touchdesigner.install_files import receipt_owns
+
+    root = tmp_path / "integration"
+    root.mkdir()
+
+    assert isinstance(RECEIPT_READABLE_SCHEMA_VERSIONS, tuple)
+    for corrupt in ([], {}, [1], {"a": 1}):
+        receipt = {
+            "schema_version": corrupt,
+            "dcc_type": "touchdesigner",
+            "owner": "dcc-mcp-touchdesigner",
+            "integration_root": str(root),
+            "files": _owned_file_entries(root, "bootstrap.py", "execute_dat.py"),
+        }
+        # No exception, and never treated as owned.
+        assert receipt_owns(receipt, root) is False
+
+
+def test_legacy_v2_receipt_can_be_overwritten_in_place(tmp_path):
+    # Install-side counterpart to the uninstall-side case: the
+    # "Refusing to replace unowned files" branch in `install_artifacts` must let
+    # a legacy v2 receipt through, so `install --yes` can repair an affected
+    # install without uninstalling first.
+    from dcc_mcp_touchdesigner.install_contract import RECEIPT_SCHEMA_VERSION
+    from dcc_mcp_touchdesigner.install_files import install_artifacts
+
+    root = tmp_path / "integration"
+    root.mkdir()
+    for name in ("bootstrap.py", "execute_dat.py"):
+        (root / name).write_text("stale", encoding="utf-8")
+
+    receipt = tmp_path / "receipt.json"
+    _write_receipt(
+        receipt,
+        root,
+        schema_version=2,
+        files=_owned_file_entries(root, "bootstrap.py", "execute_dat.py"),
+    )
+    report = {
+        "integration_root": str(root),
+        "receipt_path": str(receipt),
+        "adapter_version": ADAPTER_VERSION,
+        "core_version": "0.20.39",
+        "touchdesigner_version": "2025.30000",
+        "dcc_path": "TouchDesigner.exe",
+        "python": "python.exe",
+        "site_packages": "site-packages",
+    }
+
+    step = install_artifacts(report, {"bootstrap.py": "managed", "execute_dat.py": "managed"})
+
+    assert step["status"] == "installed"
+    assert (root / "bootstrap.py").read_text(encoding="utf-8") == "managed"
+    # The repair rewrites the receipt at the current version, closing the book.
+    assert json.loads(receipt.read_text(encoding="utf-8"))["schema_version"] == RECEIPT_SCHEMA_VERSION
+
+
 def test_receipt_write_side_is_decoupled_from_the_report_field(tmp_path):
     # The receipt is its own format, so its version must not follow the report
     # field or the core artifact revision. Writing it from either would make the

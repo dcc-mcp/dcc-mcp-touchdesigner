@@ -54,7 +54,15 @@ RECEIPT_SCHEMA_VERSION = 1
 # receipts describe real installs and have to stay readable so the CLI can
 # repair or remove them. The set is closed: `RECEIPT_SCHEMA_VERSION` no longer
 # tracks core, so no further value can ever be written.
-RECEIPT_READABLE_SCHEMA_VERSIONS = frozenset({1, 2})
+#
+# A tuple, not a set: membership is tested against a value read from JSON, so it
+# may be any type. `in` on a set hashes its operand and raises TypeError on an
+# unhashable one (a hand-edited or badly restored receipt carrying `[]`), while
+# `in` on a tuple compares by equality and simply returns False. `receipt_owns`
+# feeds `inspect_install`, which every lifecycle verb calls, so raising here
+# would turn a corrupt receipt into a traceback on the very commands a stuck
+# user needs -- `cli.py` only handles InstallFailure.
+RECEIPT_READABLE_SCHEMA_VERSIONS = (1, 2)
 
 LIFECYCLE_VERBS = {"install", "status", "verify", "uninstall", "upgrade"}
 
