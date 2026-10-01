@@ -11,7 +11,13 @@ from pathlib import Path
 from typing import Any
 
 from .__version__ import __version__
-from .install_contract import EXIT_INSTALL, EXIT_REQUIRES_RESTART, SCHEMA_VERSION, InstallFailure
+from .install_contract import (
+    EXIT_INSTALL,
+    EXIT_REQUIRES_RESTART,
+    RECEIPT_READABLE_SCHEMA_VERSIONS,
+    RECEIPT_SCHEMA_VERSION,
+    InstallFailure,
+)
 
 
 def sha256(payload: bytes) -> str:
@@ -52,7 +58,7 @@ def load_receipt(path: Path) -> dict[str, Any] | None:
 def receipt_owns(receipt: dict[str, Any] | None, root: Path) -> bool:
     if not (
         receipt
-        and receipt.get("schema_version") == SCHEMA_VERSION
+        and receipt.get("schema_version") in RECEIPT_READABLE_SCHEMA_VERSIONS
         and receipt.get("dcc_type") == "touchdesigner"
         and receipt.get("owner") == "dcc-mcp-touchdesigner"
         and receipt.get("integration_root") == str(root)
@@ -113,7 +119,7 @@ def install_artifacts(report: dict[str, Any], artifacts: dict[str, str]) -> dict
         raise InstallFailure(EXIT_INSTALL, "ownership", f"Refusing to replace unowned files in {root}")
     previous = {path: (path.read_bytes(), path.stat().st_mode) if path.is_file() else None for path in targets}
     receipt_payload = {
-        "schema_version": SCHEMA_VERSION,
+        "schema_version": RECEIPT_SCHEMA_VERSION,
         "dcc_type": "touchdesigner",
         "owner": "dcc-mcp-touchdesigner",
         "adapter_version": report["adapter_version"],
