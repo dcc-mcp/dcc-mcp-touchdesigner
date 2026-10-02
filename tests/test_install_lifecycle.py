@@ -1,3 +1,4 @@
+import hashlib
 import json
 import plistlib
 import subprocess
@@ -7,6 +8,13 @@ from pathlib import Path
 import pytest
 
 from dcc_mcp_touchdesigner.__version__ import __version__ as ADAPTER_VERSION
+
+
+def _published_schema_const():
+    """The ``schema_version`` value the published Install SOP schema pins."""
+    from dcc_mcp_core.deployment import load_install_sop_schema
+
+    return load_install_sop_schema()["properties"]["schema_version"]["const"]
 
 
 def _configure_preflight(tmp_path, monkeypatch, expected_python=None):
@@ -29,6 +37,61 @@ def _configure_preflight(tmp_path, monkeypatch, expected_python=None):
 
     monkeypatch.setattr(subprocess, "run", fake_run)
     return host
+
+
+def test_report_schema_version_matches_the_published_schema_const():
+    # ``ARTIFACT_SCHEMA_VERSION`` tracks the schema *artifact* revision and moves
+    # independently of the report field. The report field must track the
+    # artifact's ``const``, so a core that drifts it has to break this test
+    # instead of shipping invalid reports. Reading the report field from the
+    # core constant instead (the pre-fix behaviour) is precisely the bug: the
+    # two counters share a name without sharing a meaning.
+    import dcc_mcp_core
+
+    from dcc_mcp_touchdesigner.install_contract import (
+        ARTIFACT_SCHEMA_VERSION,
+        SCHEMA_VERSION,
+    )
+
+    # Unconditional: the report field must track the artifact's const.
+    assert SCHEMA_VERSION == _published_schema_const()
+
+    # The artifact revision is only knowable when the resolved core exports it.
+    core_constant = getattr(dcc_mcp_core, "INSTALL_SOP_SCHEMA_VERSION", None)
+    if core_constant is None:
+        assert ARTIFACT_SCHEMA_VERSION is None
+    else:
+        assert ARTIFACT_SCHEMA_VERSION == core_constant
+
+
+def test_lifecycle_reports_satisfy_the_published_schema(tmp_path, monkeypatch, capsys):
+    from dcc_mcp_core.deployment import validate_install_sop_report
+
+    from dcc_mcp_touchdesigner import cli
+
+    # The validator runs through the native ABI, which a pure-Python core build
+    # does not ship. The const assertion above stays unconditional; only this
+    # whole-document check is allowed to stand down.
+    native_core = pytest.importorskip("dcc_mcp_core._core")
+    if not callable(getattr(native_core, "_validate_install_sop_report_json", None)):
+        pytest.skip("resolved dcc-mcp-core has no Install SOP validator ABI")
+
+    host = _configure_preflight(tmp_path, monkeypatch)
+    dcc_path = ["--dcc-path", str(host)]
+
+    # Every verb, on both a planned and an applied path: a schema violation on
+    # any of them is a defect, not a style issue.
+    assert cli.main(["install", "--dry-run", "--json", *dcc_path]) == 0
+    validate_install_sop_report(json.loads(capsys.readouterr().out))
+
+    assert cli.main(["status", "--json"]) == 0
+    validate_install_sop_report(json.loads(capsys.readouterr().out))
+
+    assert cli.main(["verify", "--json"]) == 40
+    validate_install_sop_report(json.loads(capsys.readouterr().out))
+
+    assert cli.main(["uninstall", "--dry-run", "--json"]) == 0
+    validate_install_sop_report(json.loads(capsys.readouterr().out))
 
 
 def test_preflight_treats_symlinked_python_as_the_same_interpreter(tmp_path, monkeypatch, capsys):
@@ -78,7 +141,11 @@ def test_install_dry_run_plans_existing_release_bootstrap_without_writes(tmp_pat
     report = json.loads(capsys.readouterr().out)
     stage = next(step for step in report["steps"] if step["id"] == "stage-bootstrap")
     assert code == 0
-    assert report["schema_version"] == 1
+    # The report field is not the schema *artifact* revision (that one is 2 and
+    # moves with core); it is the value the published schema pins via
+    # `properties.schema_version.const`. Assert against the artifact so a core
+    # drift breaks here instead of shipping invalid reports.
+    assert report["schema_version"] == _published_schema_const()
     assert report["status"] == "planned"
     assert report["dcc_type"] == "touchdesigner"
     assert report["touchdesigner_version"] == "2025.30000"
@@ -340,6 +407,160 @@ def test_macos_bundle_version_is_discovered_from_info_plist(tmp_path, monkeypatc
 
     assert resolve_touchdesigner(application) == executable.resolve()
     assert touchdesigner_version(executable) == "2025.30000"
+
+
+def _write_receipt(path, root, schema_version, files=None):
+    """Write an adapter-shaped receipt at a caller-chosen schema version."""
+    path.write_text(
+        json.dumps(
+            {
+                "schema_version": schema_version,
+                "dcc_type": "touchdesigner",
+                "owner": "dcc-mcp-touchdesigner",
+                "integration_root": str(root),
+                "files": files if files is not None else [],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def _owned_file_entries(root, *names):
+    """Receipt `files` entries naming artifacts this adapter wrote."""
+    return [{"path": str(root / name), "sha256": hashlib.sha256(b"managed").hexdigest()} for name in names]
+
+
+def test_legacy_v2_receipt_still_proves_ownership(tmp_path):
+    # Releases that resolved core >= 0.20.36 wrote `schema_version: 2` on the
+    # receipt, by the same conflation fixed in install_contract. Correcting the
+    # report field to 1 must not disown those installs: `receipt_owns` gates
+    # both repair and removal, so a strict equality here strands every affected
+    # install with no CLI path back.
+    from dcc_mcp_touchdesigner.install_contract import RECEIPT_READABLE_SCHEMA_VERSIONS
+    from dcc_mcp_touchdesigner.install_files import receipt_owns, uninstall_artifacts
+
+    root = tmp_path / "integration"
+    root.mkdir()
+    for name in ("bootstrap.py", "execute_dat.py"):
+        (root / name).write_text("managed", encoding="utf-8")
+
+    receipt = tmp_path / "receipt.json"
+    # `files` must list exactly the managed artifacts: `receipt_owns` checks the
+    # file set too, and an empty list means "not ours" regardless of version.
+    _write_receipt(
+        receipt,
+        root,
+        schema_version=2,
+        files=_owned_file_entries(root, "bootstrap.py", "execute_dat.py"),
+    )
+
+    assert 2 in RECEIPT_READABLE_SCHEMA_VERSIONS
+    assert receipt_owns(json.loads(receipt.read_text(encoding="utf-8")), root)
+
+    # The point of the gate: removal must actually succeed, not refuse.
+    step = uninstall_artifacts(root, receipt)
+    assert step["status"] == "uninstalled"
+    assert not (root / "bootstrap.py").exists()
+    assert not (root / "execute_dat.py").exists()
+    assert not receipt.exists()
+
+
+def test_corrupt_receipt_schema_version_is_judged_not_owned(tmp_path):
+    # `receipt_owns` feeds `inspect_install`, which every lifecycle verb calls,
+    # and `cli.py` only handles InstallFailure. A receipt whose `schema_version`
+    # is an unhashable JSON value (hand-edited, or restored from a bad backup)
+    # must therefore be judged simply not ours -- not raise. `in` on a set hashes
+    # its operand and raises TypeError on a list or dict; `in` on a tuple compares
+    # by equality and returns False.
+    from dcc_mcp_touchdesigner.install_contract import RECEIPT_READABLE_SCHEMA_VERSIONS
+    from dcc_mcp_touchdesigner.install_files import receipt_owns
+
+    root = tmp_path / "integration"
+    root.mkdir()
+
+    assert isinstance(RECEIPT_READABLE_SCHEMA_VERSIONS, tuple)
+    for corrupt in ([], {}, [1], {"a": 1}):
+        receipt = {
+            "schema_version": corrupt,
+            "dcc_type": "touchdesigner",
+            "owner": "dcc-mcp-touchdesigner",
+            "integration_root": str(root),
+            "files": _owned_file_entries(root, "bootstrap.py", "execute_dat.py"),
+        }
+        # No exception, and never treated as owned.
+        assert receipt_owns(receipt, root) is False
+
+
+def test_legacy_v2_receipt_can_be_overwritten_in_place(tmp_path):
+    # Install-side counterpart to the uninstall-side case: the
+    # "Refusing to replace unowned files" branch in `install_artifacts` must let
+    # a legacy v2 receipt through, so `install --yes` can repair an affected
+    # install without uninstalling first.
+    from dcc_mcp_touchdesigner.install_contract import RECEIPT_SCHEMA_VERSION
+    from dcc_mcp_touchdesigner.install_files import install_artifacts
+
+    root = tmp_path / "integration"
+    root.mkdir()
+    for name in ("bootstrap.py", "execute_dat.py"):
+        (root / name).write_text("stale", encoding="utf-8")
+
+    receipt = tmp_path / "receipt.json"
+    _write_receipt(
+        receipt,
+        root,
+        schema_version=2,
+        files=_owned_file_entries(root, "bootstrap.py", "execute_dat.py"),
+    )
+    report = {
+        "integration_root": str(root),
+        "receipt_path": str(receipt),
+        "adapter_version": ADAPTER_VERSION,
+        "core_version": "0.20.39",
+        "touchdesigner_version": "2025.30000",
+        "dcc_path": "TouchDesigner.exe",
+        "python": "python.exe",
+        "site_packages": "site-packages",
+    }
+
+    step = install_artifacts(report, {"bootstrap.py": "managed", "execute_dat.py": "managed"})
+
+    assert step["status"] == "installed"
+    assert (root / "bootstrap.py").read_text(encoding="utf-8") == "managed"
+    # The repair rewrites the receipt at the current version, closing the book.
+    assert json.loads(receipt.read_text(encoding="utf-8"))["schema_version"] == RECEIPT_SCHEMA_VERSION
+
+
+def test_receipt_write_side_is_decoupled_from_the_report_field(tmp_path):
+    # The receipt is its own format, so its version must not follow the report
+    # field or the core artifact revision. Writing it from either would make the
+    # readable set grow every time core ships a schema artifact.
+    from dcc_mcp_touchdesigner.install_contract import (
+        RECEIPT_SCHEMA_VERSION,
+        SCHEMA_VERSION,
+    )
+    from dcc_mcp_touchdesigner.install_files import install_artifacts
+
+    root = tmp_path / "integration"
+    receipt = tmp_path / "receipt.json"
+    report = {
+        "integration_root": str(root),
+        "receipt_path": str(receipt),
+        "adapter_version": ADAPTER_VERSION,
+        "core_version": "0.20.8",
+        "touchdesigner_version": "2025.30000",
+        "dcc_path": "TouchDesigner.exe",
+        "python": "python.exe",
+        "site_packages": "site-packages",
+    }
+
+    install_artifacts(report, {"bootstrap.py": "managed", "execute_dat.py": "managed"})
+
+    written = json.loads(receipt.read_text(encoding="utf-8"))
+    assert written["schema_version"] == RECEIPT_SCHEMA_VERSION
+    assert written["schema_version"] in {1, 2}
+    # Guard the decoupling itself: the receipt must not start tracking core again.
+    assert RECEIPT_SCHEMA_VERSION == 1
+    assert SCHEMA_VERSION == 1
 
 
 def test_install_refuses_unowned_artifacts(tmp_path):
