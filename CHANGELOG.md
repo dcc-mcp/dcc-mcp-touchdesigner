@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.3](https://github.com/dcc-mcp/dcc-mcp-touchdesigner/compare/v0.1.2...v0.1.3) (2026-10-02)
+
+
+### Bug Fixes
+
+* stamp the report schema_version the Install SOP schema pins ([45abda1](https://github.com/dcc-mcp/dcc-mcp-touchdesigner/commit/45abda1d96b0447422152d580c2b2af6c343823b))
+
 ## [0.1.2](https://github.com/dcc-mcp/dcc-mcp-touchdesigner/compare/v0.1.1...v0.1.2) (2026-08-25)
 
 
