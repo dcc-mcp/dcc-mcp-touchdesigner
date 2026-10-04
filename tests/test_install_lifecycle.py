@@ -56,8 +56,14 @@ def test_report_schema_version_matches_the_published_schema_const():
     # Unconditional: the report field must track the artifact's const.
     assert SCHEMA_VERSION == _published_schema_const()
 
-    # The artifact revision is only knowable when the resolved core exports it.
-    core_constant = getattr(dcc_mcp_core, "INSTALL_SOP_SCHEMA_VERSION", None)
+    # The artifact revision is only knowable when the resolved core exports it,
+    # so mirror the adapter exactly: same module attribute, current name. This
+    # test used to read the deprecated alias that Core still serves as a
+    # fall-back, which passed while the adapter read the renamed constant and
+    # would have failed the day the alias is removed -- `None` here against a
+    # non-`None` artifact revision. Do not put the old alias back: A001 rejects
+    # referencing it, and keeping the two readers in step is what this asserts.
+    core_constant = getattr(dcc_mcp_core, "INSTALL_SOP_SCHEMA_REVISION", None)
     if core_constant is None:
         assert ARTIFACT_SCHEMA_VERSION is None
     else:

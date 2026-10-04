@@ -7,13 +7,19 @@ from importlib.metadata import PackageNotFoundError, version
 try:
     import dcc_mcp_core as _core
 
-    # `INSTALL_SOP_SCHEMA_VERSION` is the revision of the published Install SOP
+    # `INSTALL_SOP_SCHEMA_REVISION` is the revision of the published Install SOP
     # schema *artifact* (`adapter-install-sop-vN.schema.json`), 2 since
     # dcc-mcp-core 0.20.36. It is NOT the value of the `schema_version` field
     # that the artifact pins on a report document: that field is a separate,
     # stable counter declared as `properties.schema_version.const` and stays at
     # 1, because artifact revisions only add optional members.
-    ARTIFACT_SCHEMA_VERSION = _core.INSTALL_SOP_SCHEMA_VERSION
+    #
+    # Core 0.20.40 renamed this from `INSTALL_SOP_SCHEMA_VERSION`: the old name
+    # read like the report field above while it actually carried the artifact
+    # revision. It survives one release as a deprecated alias, and the rename
+    # here is what the shared adapter contract (A001) asks consumers to do where
+    # the value genuinely means the artifact revision.
+    ARTIFACT_SCHEMA_VERSION = _core.INSTALL_SOP_SCHEMA_REVISION
     EXIT_OK = _core.INSTALL_EXIT_OK
     EXIT_PREFLIGHT = _core.INSTALL_EXIT_PREFLIGHT
     EXIT_ACQUIRE = _core.INSTALL_EXIT_ACQUIRE
