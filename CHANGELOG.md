@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.1.3](https://github.com/dcc-mcp/dcc-mcp-touchdesigner/compare/v0.1.2...v0.1.3) (2026-10-09)
+
+
+### Bug Fixes
+
+* **ci:** cut release PRs with a collaborator token ([#14](https://github.com/dcc-mcp/dcc-mcp-touchdesigner/issues/14)) ([426bb0f](https://github.com/dcc-mcp/dcc-mcp-touchdesigner/commit/426bb0fac38b58308d943e6188f44a548d1aa87c))
+* stamp the report schema_version the Install SOP schema pins ([45abda1](https://github.com/dcc-mcp/dcc-mcp-touchdesigner/commit/45abda1d96b0447422152d580c2b2af6c343823b))
+* use Core's renamed Install SOP artifact revision constant ([201b57e](https://github.com/dcc-mcp/dcc-mcp-touchdesigner/commit/201b57e27ab98fcf3616899d3a2b84df063c164b))
+
+
+### Documentation
+
+* add the generated DCC-MCP host matrix pointer ([91391a8](https://github.com/dcc-mcp/dcc-mcp-touchdesigner/commit/91391a84c549075fb1d75c93539a0e6cb1d15441))
+
 ## [0.1.2](https://github.com/dcc-mcp/dcc-mcp-touchdesigner/compare/v0.1.1...v0.1.2) (2026-08-25)
 
 
