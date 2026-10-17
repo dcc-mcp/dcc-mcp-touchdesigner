@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.4](https://github.com/dcc-mcp/dcc-mcp-touchdesigner/compare/v0.1.3...v0.1.4) (2026-10-17)
+
+
+### Documentation
+
+* refresh the generated DCC-MCP host matrix pointer ([0787f84](https://github.com/dcc-mcp/dcc-mcp-touchdesigner/commit/0787f840325b72eae9733f9a27dbad5ec73ad755))
+* refresh the generated DCC-MCP host matrix pointer ([#16](https://github.com/dcc-mcp/dcc-mcp-touchdesigner/issues/16)) ([477a3fc](https://github.com/dcc-mcp/dcc-mcp-touchdesigner/commit/477a3fcd13e8e80663c28746d45ceb171db710ac))
+
 ## [0.1.3](https://github.com/dcc-mcp/dcc-mcp-touchdesigner/compare/v0.1.2...v0.1.3) (2026-10-09)
 
 
