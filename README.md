@@ -119,4 +119,4 @@ Unit and contract tests use a deterministic TouchDesigner API double. A release 
 
 ## License
 
-MIT
+Apache-2.0 — see [LICENSE](LICENSE), [NOTICE](NOTICE), and [TRADEMARKS.md](TRADEMARKS.md)
